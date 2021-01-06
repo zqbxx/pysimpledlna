@@ -242,5 +242,43 @@ class Device():
         return self.dlna_server.send_dlna_action({}, self, "GetMediaInfo")
 
     def position_info(self):
-        return self.dlna_server.send_dlna_action({}, self, "GetPositionInfo")
+
+        content = self.dlna_server.send_dlna_action({}, self, "GetPositionInfo")
+        domtree = xmldom.parseString(content)
+        document = domtree.documentElement
+
+        Track = document.getElementsByTagName('Track')[0].firstChild.data
+        TrackDuration = document.getElementsByTagName('TrackDuration')[0].firstChild.data
+        TrackMetaData = document.getElementsByTagName('TrackMetaData')[0].firstChild.data
+        TrackMetaData = TrackMetaData.replace('&lt;', '<').replace('&gt;', '>')
+        TrackURI = document.getElementsByTagName('TrackURI')[0].firstChild.data
+        RelTime = document.getElementsByTagName('RelTime')[0].firstChild.data
+        AbsTime = document.getElementsByTagName('AbsTime')[0].firstChild.data
+        RelCount = document.getElementsByTagName('RelCount')[0].firstChild.data
+        AbsCount = document.getElementsByTagName('AbsCount')[0].firstChild.data
+
+        def to_seconds(t:str)->int:
+            s = 0
+            a = t.split(':')
+            try:
+                s = int(a[0]) * 60 * 60 + int(a[1]) * 60 + int(a[2])
+            except Exception as e:
+                print(e)
+            return s
+
+        ret_data = {
+            'Track':Track,
+            'TrackDuration': TrackDuration,
+            'TrackDurationInSeconds': to_seconds(TrackDuration),
+            'TrackMetaData': TrackMetaData,
+            'TrackURI': TrackURI,
+            'RelTime': RelTime,
+            'RelTimeInSeconds': to_seconds(RelTime),
+            'AbsTime': AbsTime,
+            'AbsTimeInSeconds': to_seconds(AbsTime),
+            'RelCount': RelCount,
+            'AbsCount': AbsCount,
+        }
+
+        return ret_data
 
