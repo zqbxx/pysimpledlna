@@ -109,17 +109,20 @@ class SimpleDLNAServer():
                 from builtins import str
                 device_key += '__' + str(urlgroup.port)
 
-            control_url = None
+            avtranspor_control_url = None
+            rendering_control_url = None
             serviceType_elements = device_element.getElementsByTagName('serviceType')
             for serviceType_element in serviceType_elements:
                 str = serviceType_element.firstChild.data
-                if 'AVTransport' in str:
-                    control_url = serviceType_element.parentNode.getElementsByTagName('controlURL')[0].firstChild.data
-                    break
+                if 'urn:schemas-upnp-org:service:AVTranspor' in str:
+                    avtranspor_control_url = serviceType_element.parentNode.getElementsByTagName('controlURL')[0].firstChild.data
+                elif 'urn:schemas-upnp-org:service:RenderingControl' in str:
+                    rendering_control_url = serviceType_element.parentNode.getElementsByTagName('controlURL')[0].firstChild.data
 
             device = Device(self, location=url, host=urlparse(url).hostname
                             , friendly_name=friendlyName
-                            , action_url=urljoin(url, control_url)
+                            , avtranspor_action_url=urljoin(url, avtranspor_control_url)
+                            , rendering_action_url=urljoin(url, rendering_control_url)
                             , manufacturer=manufacturer
                             , manufacturer_url=manufacturerURL
                             , st=UPNP_DEFAULT_SERVICE_TYPE
@@ -179,7 +182,11 @@ class SimpleDLNAServer():
             "SOAPACTION": "\"{0}#{1}\"".format(device.st, action)
         }
 
-        request = urllibreq.Request(device.action_url, action_data, headers)
+        action_url = device.avtranspor_action_url
+        if action in ['GetVolume', 'SetMute', 'SetVolume']:
+            action_url = device.rendering_action_url
+
+        request = urllibreq.Request(action_url, action_data, headers)
         res = urllibreq.urlopen(request)
         return res.read().decode("utf-8")
 
@@ -187,15 +194,17 @@ class SimpleDLNAServer():
 class Device():
 
     def __init__(self, dlna_server: SimpleDLNAServer
-                 , location, host, friendly_name, action_url, manufacturer
-                 , manufacturer_url, st, device_key):
+                 , location, host, friendly_name
+                 , avtranspor_action_url, rendering_action_url
+                 , manufacturer , manufacturer_url, st, device_key):
 
         self.dlna_server = dlna_server
 
         self.location = location
         self.host = host
         self.friendly_name = friendly_name
-        self.action_url = action_url
+        self.avtranspor_action_url = avtranspor_action_url
+        self.rendering_action_url = rendering_action_url
         self.manufacturer = manufacturer
         self.manufacturer_url = manufacturer_url
         self.st = st
@@ -224,13 +233,26 @@ class Device():
         self.dlna_server.send_dlna_action({"Target": position}, self, "Seek")
 
     def volume(self, volume):
-        self.dlna_server.send_dlna_action({"DesiredVolume": volume}, self, "SetVolume")
+        try:
+            self.dlna_server.send_dlna_action({"DesiredVolume": volume}, self, "SetVolume")
+        except Exception as e:
+            print(e)
 
     def get_volume(self):
-        return self.dlna_server.send_dlna_action({}, self, "GetVolume")
+        try:
+            content = self.dlna_server.send_dlna_action({}, self, "GetVolume")
+            domtree = xmldom.parseString(content)
+            document = domtree.documentElement
+            return int(document.getElementsByTagName('CurrentVolume')[0].firstChild.data)
+        except Exception as e:
+            print(e)
+            return -1
 
     def mute(self):
-        self.dlna_server.send_dlna_action({}, self, "SetMute")
+        try:
+            self.dlna_server.send_dlna_action({}, self, "SetMute")
+        except Exception as e:
+            print(e)
 
     def unmute(self):
         self.dlna_server.mute()
