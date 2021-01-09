@@ -193,6 +193,10 @@ class SimpleDLNAServer():
 
 class Device():
 
+    REMOTE_PLAYER_PLAYING = 'PLAYING'
+    REMOTE_PLAYER_PAUSED = 'PAUSED_PLAYBACK'
+    REMOTE_PLAYER_STOPPED = 'STOPPED'
+
     def __init__(self, dlna_server: SimpleDLNAServer
                  , location, host, friendly_name
                  , avtranspor_action_url, rendering_action_url
@@ -257,8 +261,23 @@ class Device():
     def unmute(self):
         self.dlna_server.mute()
 
-    def info(self):
-        return self.dlna_server.send_dlna_action({}, self, "GetTransportInfo")
+    def transport_info(self):
+
+        content = self.dlna_server.send_dlna_action({}, self, "GetTransportInfo")
+        domtree = xmldom.parseString(content)
+        document = domtree.documentElement
+
+        CurrentTransportState = document.getElementsByTagName('CurrentTransportState')[0].firstChild.data
+        CurrentTransportStatus = document.getElementsByTagName('CurrentTransportStatus')[0].firstChild.data
+        CurrentSpeed = document.getElementsByTagName('CurrentSpeed')[0].firstChild.data
+
+        ret_data = {
+            'CurrentTransportState': CurrentTransportState,
+            'CurrentTransportStatus': CurrentTransportStatus,
+            'CurrentSpeed': CurrentSpeed
+        }
+
+        return ret_data
 
     def media_info(self):
         return self.dlna_server.send_dlna_action({}, self, "GetMediaInfo")
