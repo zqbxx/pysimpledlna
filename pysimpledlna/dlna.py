@@ -8,7 +8,7 @@ import urllib.request as urllibreq
 from urllib.parse import urljoin, urlparse
 from xml.sax.saxutils import escape as xmlescape
 from urllib.parse import urlparse
-
+import xml.dom.minidom as xmldom
 
 import requests
 from lxml import etree
@@ -16,7 +16,7 @@ from twisted.internet import reactor
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.web.static import File
-import xml.dom.minidom as xmldom
+
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
 SSDP_BROADCAST_PORT = 1900
@@ -200,7 +200,9 @@ class Device():
     def __init__(self, dlna_server: SimpleDLNAServer
                  , location, host, friendly_name
                  , avtranspor_action_url, rendering_action_url
-                 , manufacturer , manufacturer_url, st, device_key):
+                 , manufacturer , manufacturer_url, st, device_key
+                 , sync_remote_player_interval=1
+                 , positionhook=None, transportstatehook=None):
 
         self.dlna_server = dlna_server
 
@@ -213,8 +215,33 @@ class Device():
         self.manufacturer_url = manufacturer_url
         self.st = st
         self.device_key = device_key
+        self.positionhook = positionhook
+        self.transportstatehook = transportstatehook
+        self.sync_remote_player_interval = sync_remote_player_interval
 
         self.video_files = {}
+
+        self.sync_thread = DlnaDeviceSyncThread(self, sync_remote_player_interval)
+
+    def set_sync_interval(self, interval):
+        self.sync_remote_player_interval = interval
+        self.sync_thread.interval = interval
+
+    def set_sync_hook(self, positionhook, transportstatehook):
+        self.positionhook = positionhook
+        self.transportstatehook = transportstatehook
+
+    def start_sync_remote_player_status(self):
+        self.sync_thread.start()
+
+    def pause_sync_remote_player_status(self):
+        self.sync_thread.send_pause_event()
+
+    def resume_sync_remote_player_status(self):
+        self.sync_thread.send_resume_event()
+
+    def stop_sync_remote_player_status(self):
+        self.sync_thread.send_stop_event()
 
     def set_AV_transport_URI(self, files_urls):
         video_data = {
@@ -323,3 +350,166 @@ class Device():
 
         return ret_data
 
+
+from threading import Thread, Event
+from enum import Enum, IntEnum, unique
+import time
+import traceback
+
+try:
+    @unique
+    class ThreadStatus(Enum):
+        STOPPED = 1
+        RUNNING = 2
+        PAUSED = 3
+except ValueError as e:
+    print(e)
+
+
+class StatusException(Exception):
+
+    def __init__(self, err_msg):
+        self.err_msg = {'message': err_msg}
+        self.err_msg_detail = err_msg
+        Exception.__init__(self, self.err_msg, self.err_msg_detail)
+
+
+class EasyThread(Thread):
+
+    def __init__(self):
+        Thread.__init__(self)
+        self.stopEvent = Event()
+        self.pauseEvent = Event()
+        self.__current_status = ThreadStatus.STOPPED
+
+    def run(self):
+
+        self.__current_status = ThreadStatus.RUNNING
+
+        while True:
+
+            if self.pauseEvent.is_set():
+                self.__wait_for_notify()
+
+            if self.stopEvent.is_set():
+                self.__stop_thread()
+                return
+
+            self.do_it()
+
+    def do_it(self):
+        pass
+
+    def __wait_for_notify(self):
+        self.__current_status = ThreadStatus.PAUSED
+        self.pauseEvent.clear()
+        self.pauseEvent.wait()
+        self.pauseEvent.clear()
+        self.__current_status = ThreadStatus.RUNNING
+
+    def __stop_thread(self):
+        self.stopEvent.clear()
+        self.__current_status = ThreadStatus.STOPPED
+
+    def send_pause_event(self):
+        if self.__current_status == ThreadStatus.RUNNING:
+            self.pauseEvent.set()
+        else:
+            raise StatusException('当前线程处于' + self.__current_status.name + '状态，无法暂停')
+
+    def send_resume_event(self):
+        if self.__current_status == ThreadStatus.PAUSED:
+            self.pauseEvent.set()
+        else:
+            raise StatusException('当前线程处于' + self.__current_status.name + '状态，无法恢复')
+
+    def send_stop_event(self):
+        if self.__current_status != ThreadStatus.STOPPED:
+            self.stopEvent.set()
+
+
+class DlnaDeviceSyncThread(EasyThread):
+
+    def __init__(self, device: Device, interval=1):
+        EasyThread.__init__(self)
+        self.device = device
+        self.last_status = None
+        self.interval = interval
+
+    def do_it(self):
+
+        start = time.time()
+
+        transport_info = self.device.transport_info()
+        position_info = self.device.position_info()
+
+        if self.last_status is None:
+
+            self.last_status = {
+                'transport_info': transport_info,
+                'position_info': position_info
+            }
+
+            try:
+                self.device.transportstatehook(type='CurrentTransportState', old_value=None,
+                                               new_value=transport_info['CurrentTransportState'])
+            except:
+                traceback.print_exc()
+
+            try:
+                self.device.positionhook(type='TrackURI', old_value=None, new_value=position_info['TrackURI'])
+            except:
+                traceback.print_exc()
+
+            try:
+                self.device.positionhook(type='TrackDurationInSeconds', old_value=None,
+                                         new_value=position_info['TrackDurationInSeconds'])
+            except:
+                traceback.print_exc()
+
+            try:
+                self.device.positionhook(type='RelTimeInSeconds', old_value=None,
+                                         new_value=position_info['RelTimeInSeconds'])
+            except:
+                traceback.print_exc()
+
+        else:
+
+            try:
+                if transport_info['CurrentTransportState'] != self.last_status['transport_info']['CurrentTransportState']:
+                    self.device.transportstatehook(type='CurrentTransportState',
+                                                   old_value=self.last_status['transport_info']['CurrentTransportState'],
+                                                   new_value=transport_info['CurrentTransportState'])
+            except:
+                traceback.print_exc()
+
+            try:
+                if position_info['TrackURI'] != self.last_status['position_info']['TrackURI']:
+                    self.device.positionhook(type='TrackURI',
+                                             old_value=self.last_status['position_info']['TrackURI'],
+                                             new_value=position_info['TrackURI'])
+            except:
+                traceback.print_exc()
+
+            try:
+                if position_info['TrackDurationInSeconds'] != self.last_status['position_info']['TrackDurationInSeconds']:
+                    self.device.positionhook(type='TrackDurationInSeconds',
+                                             old_value=self.last_status['position_info']['TrackDurationInSeconds'],
+                                             new_value=position_info['TrackDurationInSeconds'])
+            except:
+                traceback.print_exc()
+
+            try:
+                if position_info['RelTimeInSeconds'] != self.last_status['position_info']['RelTimeInSeconds']:
+                    self.device.positionhook(type='RelTimeInSeconds',
+                                             old_value=self.last_status['position_info']['RelTimeInSeconds'],
+                                             new_value=position_info['RelTimeInSeconds'])
+            except:
+                traceback.print_exc()
+
+        end = time.time()
+
+        duration = end - start
+        wait_seconds = self.interval - duration
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
