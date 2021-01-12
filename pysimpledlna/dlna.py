@@ -221,7 +221,8 @@ class Device():
 
         self.video_files = {}
 
-        self.sync_thread = DlnaDeviceSyncThread(self, sync_remote_player_interval)
+        self.sync_thread = DlnaDeviceSyncThread(self, interval=self.sync_remote_player_interval)
+        self.old_thread = None
 
     def set_sync_interval(self, interval):
         self.sync_remote_player_interval = interval
@@ -232,16 +233,36 @@ class Device():
         self.transportstatehook = transportstatehook
 
     def start_sync_remote_player_status(self):
-        self.sync_thread.start()
+        if self.sync_thread:
+            self.sync_thread.start()
+            return True
+        return False
 
     def pause_sync_remote_player_status(self):
-        self.sync_thread.send_pause_event()
+        if self.sync_thread:
+            self.sync_thread.send_pause_event()
+            return True
+        return False
 
     def resume_sync_remote_player_status(self):
-        self.sync_thread.send_resume_event()
+        if self.sync_thread:
+            self.sync_thread.send_resume_event()
+            return True
+        return False
 
     def stop_sync_remote_player_status(self):
-        self.sync_thread.send_stop_event()
+        if self.sync_thread:
+            self.old_thread = self.sync_thread
+            self.sync_thread.send_stop_event(self.__after_sync_thread_stopped)
+            self.sync_thread = None
+            return True
+        return False
+
+    def __after_sync_thread_stopped(self):
+        self.sync_thread = DlnaDeviceSyncThread(self
+                                                , interval=self.sync_remote_player_interval
+                                                , last_status=self.old_thread.last_status)
+        self.old_thread = None
 
     def set_AV_transport_URI(self, files_urls):
         video_data = {
@@ -381,6 +402,7 @@ class EasyThread(Thread):
         self.stopEvent = Event()
         self.pauseEvent = Event()
         self.__current_status = ThreadStatus.STOPPED
+        self.stophook = None
 
     def run(self):
 
@@ -393,9 +415,12 @@ class EasyThread(Thread):
 
             if self.stopEvent.is_set():
                 self.__stop_thread()
-                return
+                break
 
             self.do_it()
+
+        if self.stophook is not None:
+            self.stophook()
 
     def do_it(self):
         pass
@@ -423,93 +448,71 @@ class EasyThread(Thread):
         else:
             raise StatusException('当前线程处于' + self.__current_status.name + '状态，无法恢复')
 
-    def send_stop_event(self):
+    def send_stop_event(self, stophook=None):
         if self.__current_status != ThreadStatus.STOPPED:
+            self.stophook = stophook
             self.stopEvent.set()
 
 
 class DlnaDeviceSyncThread(EasyThread):
 
-    def __init__(self, device: Device, interval=1):
+    def __init__(self, device: Device, last_status=None, interval=1):
         EasyThread.__init__(self)
         self.device = device
-        self.last_status = None
+        self.last_status = last_status
         self.interval = interval
 
-    def do_it(self):
+    def call_hook(self, func, type, old_value, new_value):
+        if func is None:
+            return
+        try:
+            if old_value is None or old_value != new_value:
+                func(type, old_value, new_value)
+        except:
+            traceback.print_exc()
 
-        start = time.time()
-
-        transport_info = self.device.transport_info()
-        position_info = self.device.position_info()
-
-        if self.last_status is None:
-
-            self.last_status = {
-                'transport_info': transport_info,
-                'position_info': position_info
-            }
-
-            try:
-                self.device.transportstatehook(type='CurrentTransportState', old_value=None,
-                                               new_value=transport_info['CurrentTransportState'])
-            except:
-                traceback.print_exc()
-
-            try:
-                self.device.positionhook(type='TrackURI', old_value=None, new_value=position_info['TrackURI'])
-            except:
-                traceback.print_exc()
-
-            try:
-                self.device.positionhook(type='TrackDurationInSeconds', old_value=None,
-                                         new_value=position_info['TrackDurationInSeconds'])
-            except:
-                traceback.print_exc()
-
-            try:
-                self.device.positionhook(type='RelTimeInSeconds', old_value=None,
-                                         new_value=position_info['RelTimeInSeconds'])
-            except:
-                traceback.print_exc()
-
-        else:
-
-            try:
-                if transport_info['CurrentTransportState'] != self.last_status['transport_info']['CurrentTransportState']:
-                    self.device.transportstatehook(type='CurrentTransportState',
-                                                   old_value=self.last_status['transport_info']['CurrentTransportState'],
-                                                   new_value=transport_info['CurrentTransportState'])
-            except:
-                traceback.print_exc()
-
-            try:
-                if position_info['TrackURI'] != self.last_status['position_info']['TrackURI']:
-                    self.device.positionhook(type='TrackURI',
-                                             old_value=self.last_status['position_info']['TrackURI'],
-                                             new_value=position_info['TrackURI'])
-            except:
-                traceback.print_exc()
-
-            try:
-                if position_info['TrackDurationInSeconds'] != self.last_status['position_info']['TrackDurationInSeconds']:
-                    self.device.positionhook(type='TrackDurationInSeconds',
-                                             old_value=self.last_status['position_info']['TrackDurationInSeconds'],
-                                             new_value=position_info['TrackDurationInSeconds'])
-            except:
-                traceback.print_exc()
-
-            try:
-                if position_info['RelTimeInSeconds'] != self.last_status['position_info']['RelTimeInSeconds']:
-                    self.device.positionhook(type='RelTimeInSeconds',
-                                             old_value=self.last_status['position_info']['RelTimeInSeconds'],
-                                             new_value=position_info['RelTimeInSeconds'])
-            except:
-                traceback.print_exc()
-
-        end = time.time()
-
+    def wait_interval(self, start, end):
         duration = end - start
         wait_seconds = self.interval - duration
         if wait_seconds > 0:
             time.sleep(wait_seconds)
+
+    def do_it(self):
+
+        start = time.time()
+        transport_info = None
+        position_info = None
+
+        try:
+            transport_info = self.device.transport_info()
+            position_info = self.device.position_info()
+        except:
+            # 播放器的异常，不处理，可能是尚未准备就绪
+            traceback.print_exc()
+            self.wait_interval(start, time.time())
+
+        transportstatehook = self.device.transportstatehook
+        positionhook = self.device.positionhook
+
+        if self.last_status is None:
+            self.call_hook(transportstatehook, 'CurrentTransportState', None, transport_info['CurrentTransportState'])
+            self.call_hook(positionhook, 'TrackURI', None, position_info['TrackURI'])
+            self.call_hook(positionhook, 'TrackDurationInSeconds', None, position_info['TrackDurationInSeconds'])
+            self.call_hook(positionhook, 'RelTimeInSeconds', None, position_info['RelTimeInSeconds'])
+        else:
+            last_position_info = self.last_status['position_info']
+            last_transport_info = self.last_status['transport_info']
+            self.call_hook(transportstatehook, 'CurrentTransportState'
+                           , last_transport_info['CurrentTransportState'], transport_info['CurrentTransportState'])
+            self.call_hook(positionhook, 'TrackURI'
+                           , last_position_info['TrackURI'], position_info['TrackURI'])
+            self.call_hook(positionhook, 'TrackDurationInSeconds'
+                           , last_position_info['TrackDurationInSeconds'], position_info['TrackDurationInSeconds'])
+            self.call_hook(positionhook, 'RelTimeInSeconds'
+                           , last_position_info['RelTimeInSeconds'], position_info['RelTimeInSeconds'])
+
+        self.last_status = {
+            'transport_info': transport_info,
+            'position_info': position_info
+        }
+        self.wait_interval(start, time.time())
