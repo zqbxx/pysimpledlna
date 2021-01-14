@@ -1,21 +1,22 @@
 import os
 import pkgutil
-import re
 import socket
 import threading
-import base64
 import urllib.request as urllibreq
 from urllib.parse import urljoin, urlparse
-from xml.sax.saxutils import escape as xmlescape
 from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
 
 import requests
-from lxml import etree
 from twisted.internet import reactor
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.web.static import File
+
+from threading import Thread, Event
+from enum import Enum, IntEnum, unique
+import time
+import traceback
 
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
@@ -58,6 +59,13 @@ class SimpleDLNAServer():
         self.root.children[device.device_key.encode("utf-8")].putChild(file_name.encode("utf-8"), File(file_path))
 
         return file_url
+
+    def get_device_root(self, device):
+        device_root = self.root.children.get(device.device_key)
+        if device_root is None:
+            device_root = Resource()
+            self.root.putChild(device.device_key.encode("utf-8"), device_root)
+        return device_root
 
     def is_file_on_server(self, device, file_path):
         file_name, file_url, file_path = self.set_files(file_path)
@@ -219,10 +227,19 @@ class Device():
         self.transportstatehook = transportstatehook
         self.sync_remote_player_interval = sync_remote_player_interval
 
-        self.video_files = {}
+        self.video_files = self.dlna_server.get_device_root(self)
 
         self.sync_thread = DlnaDeviceSyncThread(self, interval=self.sync_remote_player_interval)
-        self.old_thread = None
+
+    def add_file(self, file_path):
+        file_name, file_url, file_path = self.dlna_server.set_files(self, file_path)
+        self.video_files.putChild(file_name.encode("utf-8"), File(file_path))
+        return file_url
+
+    def remove_file(self, file_path):
+        file_name, file_url, file_path = self.dlna_server.set_files(self, file_path)
+        if self.video_files.children.get(file_name.encode("utf-8")) is not None:
+            del self.video_files.children[file_name.encode("utf-8")]
 
     def set_sync_interval(self, interval):
         self.sync_remote_player_interval = interval
@@ -252,9 +269,7 @@ class Device():
 
     def stop_sync_remote_player_status(self):
         if self.sync_thread:
-            self.old_thread = self.sync_thread
             self.sync_thread.send_stop_event(self.__after_sync_thread_stopped)
-            self.sync_thread = None
             return True
         return False
 
@@ -262,7 +277,6 @@ class Device():
         self.sync_thread = DlnaDeviceSyncThread(self
                                                 , interval=self.sync_remote_player_interval
                                                 , last_status=self.old_thread.last_status)
-        self.old_thread = None
 
     def set_AV_transport_URI(self, files_urls):
         video_data = {
@@ -371,11 +385,6 @@ class Device():
 
         return ret_data
 
-
-from threading import Thread, Event
-from enum import Enum, IntEnum, unique
-import time
-import traceback
 
 try:
     @unique
@@ -490,6 +499,7 @@ class DlnaDeviceSyncThread(EasyThread):
             # 播放器的异常，不处理，可能是尚未准备就绪
             traceback.print_exc()
             self.wait_interval(start, time.time())
+            return
 
         transportstatehook = self.device.transportstatehook
         positionhook = self.device.positionhook
