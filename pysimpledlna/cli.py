@@ -2,12 +2,14 @@ import argparse
 import time
 import signal
 import logging
+import sys
+import os
 
 from pysimpledlna import SimpleDLNAServer, Device
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='命令')
     create_list_parser(subparsers)
@@ -57,6 +59,7 @@ def play(args):
     device = dlna_server.parse_xml(url)
     dlna_server.register_device(device)
     dlna_server.start_server()
+
     ac = ActionController(file_list, device)
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook)
     device.start_sync_remote_player_status()
@@ -65,9 +68,14 @@ def play(args):
     try:
         while True:
             time.sleep(1)
-    except ServiceExit:
-        device.stop_sync_remote_player_status()
-        dlna_server.stop_server()
+    except:
+        stop_app(device, dlna_server)
+
+
+def stop_app(device: Device, dlna_server: SimpleDLNAServer):
+    device.stop_sync_remote_player_status()
+    device.stop()
+    dlna_server.stop_server()
 
 
 def signal_handler(signal, frame):
@@ -99,13 +107,15 @@ class ActionController:
         logging.debug('type: ' + type + ' old:' + str(old_value) + ' new:' + str(new_value))
 
         if type == 'CurrentTransportState':
-            if old_value in ['PLAYING'] and new_value == 'STOPPED':
+            if old_value in ['PLAYING', 'PAUSED_PLAYBACK'] and new_value == 'STOPPED':
                 if self.current_video_position >= self.current_video_duration - 2 * self.device.sync_remote_player_interval:
+                    # 只对播放文件末尾时间进行处理
                     if self.current_idx < len(self.file_list):
                         self.play_next()
                 else:
-                    #TODO 用户停止操作，需要停止服务器
-                    pass
+                    stop_app(self.device, self.device.dlna_server)
+                    os.kill(signal.CTRL_C_EVENT, 0)
+
         elif type == 'TrackDurationInSeconds':
             self.current_video_duration = new_value
         elif type == 'RelTimeInSeconds':
@@ -113,7 +123,8 @@ class ActionController:
 
     def play_next(self):
         file_path = self.file_list[self.current_idx]
-        self.device.set_AV_transport_URI(file_path)
+        server_file_path = self.device.add_file(file_path)
+        self.device.set_AV_transport_URI(server_file_path)
         self.device.play()
         self.current_idx += 1
 
