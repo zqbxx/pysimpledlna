@@ -2,10 +2,13 @@ import argparse
 import time
 import signal
 import logging
-import sys
 import os
 
 from pysimpledlna import SimpleDLNAServer, Device
+
+
+_DLNA_SERVER = SimpleDLNAServer(9000)
+_DLNA_SERVER.start_server()
 
 
 def main():
@@ -15,7 +18,10 @@ def main():
     create_list_parser(subparsers)
     create_play_parser(subparsers)
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    finally:
+        _DLNA_SERVER.stop_server()
 
 
 def create_list_parser(subparsers):
@@ -25,7 +31,7 @@ def create_list_parser(subparsers):
     list_parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int,
                              help='maximum number of dlna device')
     list_parser.set_defaults(func=list_device)
-    return 'list', list_parser
+    return command, list_parser
 
 
 def create_play_parser(subparsers):
@@ -35,10 +41,11 @@ def create_play_parser(subparsers):
     play_parser.add_argument('-u', '--url', dest='url', required=True, type=str,
                              help='dlna device url')
     play_parser.set_defaults(func=play)
+    return command, play_parser
 
 
 def list_device(args):
-    dlna_server = SimpleDLNAServer(9000)
+    dlna_server = _DLNA_SERVER
     device_found = False
     for i, device in enumerate(dlna_server.get_devices(args.timeout)):
         print('[', i+1, ']', device.friendly_name, '@', device.location)
@@ -49,7 +56,7 @@ def list_device(args):
 
 def play(args):
 
-    dlna_server = SimpleDLNAServer(9000)
+    dlna_server = _DLNA_SERVER
     url = args.url
     file_list = args.input
 
@@ -58,7 +65,6 @@ def play(args):
 
     device = dlna_server.parse_xml(url)
     dlna_server.register_device(device)
-    dlna_server.start_server()
 
     ac = ActionController(file_list, device)
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook)
@@ -69,13 +75,13 @@ def play(args):
         while True:
             time.sleep(1)
     except:
-        stop_app(device, dlna_server)
+        stop_device(device)
+        dlna_server.stop_server()
 
 
-def stop_app(device: Device, dlna_server: SimpleDLNAServer):
+def stop_device(device: Device):
     device.stop_sync_remote_player_status()
     device.stop()
-    dlna_server.stop_server()
 
 
 def signal_handler(signal, frame):
@@ -107,13 +113,17 @@ class ActionController:
         logging.debug('type: ' + type + ' old:' + str(old_value) + ' new:' + str(new_value))
 
         if type == 'CurrentTransportState':
+            logging.debug('try play next video:')
+            logging.debug('current_video_position:' + str(self.current_video_position))
+            logging.debug('current_video_duration:' + str(self.current_video_duration))
             if old_value in ['PLAYING', 'PAUSED_PLAYBACK'] and new_value == 'STOPPED':
-                if self.current_video_position >= self.current_video_duration - 2 * self.device.sync_remote_player_interval:
+                if self.current_video_position >= self.current_video_duration - 3 * self.device.sync_remote_player_interval:
                     # 只对播放文件末尾时间进行处理
                     if self.current_idx < len(self.file_list):
+                        logging.debug('play next video')
                         self.play_next()
                 else:
-                    stop_app(self.device, self.device.dlna_server)
+                    stop_device(self.device)
                     os.kill(signal.CTRL_C_EVENT, 0)
 
         elif type == 'TrackDurationInSeconds':
