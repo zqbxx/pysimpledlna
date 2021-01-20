@@ -14,14 +14,27 @@ _DLNA_SERVER.start_server()
 def main():
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
     parser = argparse.ArgumentParser()
+    wrap_parser_exit(parser)
     subparsers = parser.add_subparsers(help='命令')
-    create_list_parser(subparsers)
-    create_play_parser(subparsers)
+    _, list_parser = create_list_parser(subparsers)
+    wrap_parser_exit(list_parser)
+    _, play_parser = create_play_parser(subparsers)
+    wrap_parser_exit(play_parser)
     args = parser.parse_args()
     try:
         args.func(args)
     finally:
         _DLNA_SERVER.stop_server()
+
+
+def wrap_parser_exit(parser: argparse.ArgumentParser):
+    exit_func = parser.exit
+
+    def exit(status=0, message=None):
+        _DLNA_SERVER.stop_server()
+        exit_func(status, message)
+
+    parser.exit = exit
 
 
 def create_list_parser(subparsers):
