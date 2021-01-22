@@ -17,6 +17,7 @@ from threading import Thread, Event
 from enum import Enum, IntEnum, unique
 import time
 import traceback
+import logging
 
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
@@ -40,13 +41,18 @@ class SimpleDLNAServer():
         self.root = Resource()
         self.server_ip = socket.gethostbyname(socket.gethostname())
         self.known_devices = {}
+        self.is_server_started = False
 
     def start_server(self):
         reactor.listenTCP(self.server_port, Site(self.root))
         threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}).start()
+        self.is_server_started = True
 
     def stop_server(self):
-        reactor.stop()
+        if self.is_server_started:
+            reactor.stop()
+            self.is_server_started = False
+
 
     def add_file_to_server(self, device, file_path):
 
@@ -274,9 +280,10 @@ class Device():
         return False
 
     def __after_sync_thread_stopped(self):
+        old_thread = self.sync_thread
         self.sync_thread = DlnaDeviceSyncThread(self
                                                 , interval=self.sync_remote_player_interval
-                                                , last_status=self.old_thread.last_status)
+                                                , last_status=old_thread.last_status)
 
     def set_AV_transport_URI(self, files_urls):
         video_data = {
@@ -348,42 +355,48 @@ class Device():
 
         content = self.dlna_server.send_dlna_action({}, self, "GetPositionInfo")
         domtree = xmldom.parseString(content)
-        document = domtree.documentElement
+        document= domtree.documentElement
 
-        Track = document.getElementsByTagName('Track')[0].firstChild.data
-        TrackDuration = document.getElementsByTagName('TrackDuration')[0].firstChild.data
-        TrackMetaData = document.getElementsByTagName('TrackMetaData')[0].firstChild.data
-        TrackMetaData = TrackMetaData.replace('&lt;', '<').replace('&gt;', '>')
-        TrackURI = document.getElementsByTagName('TrackURI')[0].firstChild.data
-        RelTime = document.getElementsByTagName('RelTime')[0].firstChild.data
-        AbsTime = document.getElementsByTagName('AbsTime')[0].firstChild.data
-        RelCount = document.getElementsByTagName('RelCount')[0].firstChild.data
-        AbsCount = document.getElementsByTagName('AbsCount')[0].firstChild.data
+        # 用于查找偶尔出现的问题
+        try:
+            Track = document.getElementsByTagName('Track')[0].firstChild.data
+            TrackDuration = document.getElementsByTagName('TrackDuration')[0].firstChild.data
+            TrackMetaData = document.getElementsByTagName('TrackMetaData')[0].firstChild.data
+            TrackMetaData = TrackMetaData.replace('&lt;', '<').replace('&gt;', '>')
+            TrackURI = document.getElementsByTagName('TrackURI')[0].firstChild.data
+            RelTime = document.getElementsByTagName('RelTime')[0].firstChild.data
+            AbsTime = document.getElementsByTagName('AbsTime')[0].firstChild.data
+            RelCount = document.getElementsByTagName('RelCount')[0].firstChild.data
+            AbsCount = document.getElementsByTagName('AbsCount')[0].firstChild.data
 
-        def to_seconds(t:str)->int:
-            s = 0
-            a = t.split(':')
-            try:
-                s = int(a[0]) * 60 * 60 + int(a[1]) * 60 + int(a[2])
-            except Exception as e:
-                print(e)
-            return s
 
-        ret_data = {
-            'Track':Track,
-            'TrackDuration': TrackDuration,
-            'TrackDurationInSeconds': to_seconds(TrackDuration),
-            'TrackMetaData': TrackMetaData,
-            'TrackURI': TrackURI,
-            'RelTime': RelTime,
-            'RelTimeInSeconds': to_seconds(RelTime),
-            'AbsTime': AbsTime,
-            'AbsTimeInSeconds': to_seconds(AbsTime),
-            'RelCount': RelCount,
-            'AbsCount': AbsCount,
-        }
+            def to_seconds(t:str)->int:
+                s = 0
+                a = t.split(':')
+                try:
+                    s = int(a[0]) * 60 * 60 + int(a[1]) * 60 + int(a[2])
+                except Exception as e:
+                    print(e)
+                return s
 
-        return ret_data
+            ret_data = {
+                'Track':Track,
+                'TrackDuration': TrackDuration,
+                'TrackDurationInSeconds': to_seconds(TrackDuration),
+                'TrackMetaData': TrackMetaData,
+                'TrackURI': TrackURI,
+                'RelTime': RelTime,
+                'RelTimeInSeconds': to_seconds(RelTime),
+                'AbsTime': AbsTime,
+                'AbsTimeInSeconds': to_seconds(AbsTime),
+                'RelCount': RelCount,
+                'AbsCount': AbsCount,
+            }
+
+            return ret_data
+        except Exception as e:
+            print(content)
+            raise e
 
 
 try:
@@ -416,20 +429,22 @@ class EasyThread(Thread):
     def run(self):
 
         self.__current_status = ThreadStatus.RUNNING
+        try:
+            while True:
 
-        while True:
+                if self.pauseEvent.is_set():
+                    self.__wait_for_notify()
 
-            if self.pauseEvent.is_set():
-                self.__wait_for_notify()
+                if self.stopEvent.is_set():
+                    self.__stop_thread()
+                    break
 
-            if self.stopEvent.is_set():
-                self.__stop_thread()
-                break
+                self.do_it()
 
-            self.do_it()
-
-        if self.stophook is not None:
-            self.stophook()
+            if self.stophook is not None:
+                self.stophook()
+        finally:
+            self.__current_status = ThreadStatus.STOPPED
 
     def do_it(self):
         pass
@@ -470,6 +485,7 @@ class DlnaDeviceSyncThread(EasyThread):
         self.device = device
         self.last_status = last_status
         self.interval = interval
+        self.count = 0
 
     def call_hook(self, func, type, old_value, new_value):
         if func is None:
@@ -498,20 +514,35 @@ class DlnaDeviceSyncThread(EasyThread):
         except:
             # 播放器的异常，不处理，可能是尚未准备就绪
             traceback.print_exc()
-            self.wait_interval(start, time.time())
+            if self.count < 5:
+                # 第一次播放时远程播放器可能无法获得position_info
+                # 停止播放并重启
+                self.device.stop()
+                self.count = 0
+                time.sleep(1)
+                self.device.play()
+            else:
+                self.wait_interval(start, time.time())
             return
 
         transportstatehook = self.device.transportstatehook
         positionhook = self.device.positionhook
+
+        logging.debug('-------start-------------')
 
         if self.last_status is None:
             self.call_hook(transportstatehook, 'CurrentTransportState', None, transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackURI', None, position_info['TrackURI'])
             self.call_hook(positionhook, 'TrackDurationInSeconds', None, position_info['TrackDurationInSeconds'])
             self.call_hook(positionhook, 'RelTimeInSeconds', None, position_info['RelTimeInSeconds'])
+
         else:
             last_position_info = self.last_status['position_info']
             last_transport_info = self.last_status['transport_info']
+
+            if last_position_info['TrackURI'] is None and position_info['TrackURI'] is not None or position_info['TrackURI'] != last_position_info['TrackURI']:
+                self.count = 0
+
             self.call_hook(transportstatehook, 'CurrentTransportState'
                            , last_transport_info['CurrentTransportState'], transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackURI'
@@ -520,9 +551,12 @@ class DlnaDeviceSyncThread(EasyThread):
                            , last_position_info['TrackDurationInSeconds'], position_info['TrackDurationInSeconds'])
             self.call_hook(positionhook, 'RelTimeInSeconds'
                            , last_position_info['RelTimeInSeconds'], position_info['RelTimeInSeconds'])
+            self.call_hook(positionhook, 'UpdatePositionEnd', None, 0)
 
+        logging.debug('-------end-------------')
         self.last_status = {
             'transport_info': transport_info,
             'position_info': position_info
         }
+        self.count += 1
         self.wait_interval(start, time.time())
