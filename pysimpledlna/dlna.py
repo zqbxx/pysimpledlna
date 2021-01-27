@@ -18,6 +18,10 @@ from enum import Enum, IntEnum, unique
 import time
 import traceback
 import logging
+from pysimpledlna.utils import (
+    get_element_data_by_tag_name, get_element_by_tag_name,
+    to_seconds,
+    ThreadStatus)
 
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
@@ -102,10 +106,10 @@ class SimpleDLNAServer():
             content = requests.get(url).content.decode()
             domtree = xmldom.parseString(content)
             document = domtree.documentElement
-            device_element = document.getElementsByTagName('device')[0]
-            friendlyName = device_element.getElementsByTagName('friendlyName')[0].firstChild.data
-            manufacturer = device_element.getElementsByTagName('manufacturer')[0].firstChild.data
-            manufacturerURL = device_element.getElementsByTagName('manufacturerURL')[0].firstChild.data
+            device_element = get_element_by_tag_name(document, 'device')
+            friendlyName = get_element_data_by_tag_name(device_element, 'friendlyName')
+            manufacturer = get_element_data_by_tag_name(device_element, 'manufacturer')
+            manufacturerURL = get_element_data_by_tag_name(device_element, 'manufacturerURL')
             '''
             presentationURL = device_element.getElementsByTagName('presentationURL')[0].firstChild.data
             modelDescription = device_element.getElementsByTagName('modelDescription')[0].firstChild.data
@@ -316,7 +320,7 @@ class Device():
             content = self.dlna_server.send_dlna_action({}, self, "GetVolume")
             domtree = xmldom.parseString(content)
             document = domtree.documentElement
-            return int(document.getElementsByTagName('CurrentVolume')[0].firstChild.data)
+            return int(get_element_data_by_tag_name(document, 'CurrentVolume', default=-1))
         except Exception as e:
             print(e)
             return -1
@@ -336,9 +340,9 @@ class Device():
         domtree = xmldom.parseString(content)
         document = domtree.documentElement
 
-        CurrentTransportState = document.getElementsByTagName('CurrentTransportState')[0].firstChild.data
-        CurrentTransportStatus = document.getElementsByTagName('CurrentTransportStatus')[0].firstChild.data
-        CurrentSpeed = document.getElementsByTagName('CurrentSpeed')[0].firstChild.data
+        CurrentTransportState = get_element_data_by_tag_name(document, 'CurrentTransportState')
+        CurrentTransportStatus = get_element_data_by_tag_name(document, 'CurrentTransportStatus')
+        CurrentSpeed = get_element_data_by_tag_name(document, 'CurrentSpeed')
 
         ret_data = {
             'CurrentTransportState': CurrentTransportState,
@@ -359,28 +363,18 @@ class Device():
 
         # 用于查找偶尔出现的问题
         try:
-            Track = document.getElementsByTagName('Track')[0].firstChild.data
-            TrackDuration = document.getElementsByTagName('TrackDuration')[0].firstChild.data
-            TrackMetaData = document.getElementsByTagName('TrackMetaData')[0].firstChild.data
+            Track = get_element_data_by_tag_name(document, 'Track', 0, '')
+            TrackDuration = get_element_data_by_tag_name(document, 'TrackDuration', 0, '')
+            TrackMetaData = get_element_data_by_tag_name(document, 'TrackMetaData', 0, '')
             TrackMetaData = TrackMetaData.replace('&lt;', '<').replace('&gt;', '>')
-            TrackURI = document.getElementsByTagName('TrackURI')[0].firstChild.data
-            RelTime = document.getElementsByTagName('RelTime')[0].firstChild.data
-            AbsTime = document.getElementsByTagName('AbsTime')[0].firstChild.data
-            RelCount = document.getElementsByTagName('RelCount')[0].firstChild.data
-            AbsCount = document.getElementsByTagName('AbsCount')[0].firstChild.data
-
-
-            def to_seconds(t:str)->int:
-                s = 0
-                a = t.split(':')
-                try:
-                    s = int(a[0]) * 60 * 60 + int(a[1]) * 60 + int(a[2])
-                except Exception as e:
-                    print(e)
-                return s
+            TrackURI = get_element_data_by_tag_name(document, 'TrackURI', 0, '')
+            RelTime = get_element_data_by_tag_name(document, 'RelTime', 0, '00:00:00')
+            AbsTime = get_element_data_by_tag_name(document, 'AbsTime', 0, '00:00:00')
+            RelCount = get_element_data_by_tag_name(document, 'RelCount', 0, 0)
+            AbsCount = get_element_data_by_tag_name(document, 'AbsCount', 0, 0)
 
             ret_data = {
-                'Track':Track,
+                'Track': Track,
                 'TrackDuration': TrackDuration,
                 'TrackDurationInSeconds': to_seconds(TrackDuration),
                 'TrackMetaData': TrackMetaData,
@@ -397,16 +391,6 @@ class Device():
         except Exception as e:
             print(content)
             raise e
-
-
-try:
-    @unique
-    class ThreadStatus(Enum):
-        STOPPED = 1
-        RUNNING = 2
-        PAUSED = 3
-except ValueError as e:
-    print(e)
 
 
 class StatusException(Exception):
