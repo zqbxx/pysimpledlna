@@ -1,5 +1,6 @@
 from xml.dom.minidom import Childless
 from enum import Enum
+import time
 
 
 class ThreadStatus(Enum):
@@ -24,6 +25,13 @@ def get_element_by_tag_name(doc, tag_name, index=0, default=Childless()):
         return default
     return elements[index]
 
+
+def wait_interval(interval, start, end):
+    dur = end - start
+    rest = interval - dur
+    if rest >= 0:
+        time.sleep(rest)
+    return rest
 
 def to_seconds(t: str) -> int:
     s = 0
