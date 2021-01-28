@@ -5,6 +5,7 @@ import time
 
 from pysimpledlna import Device
 from pysimpledlna.ui.terminal import Player, PlayerStatus
+from pysimpledlna.utils import wait_interval
 
 
 class ActionController:
@@ -48,11 +49,7 @@ class ActionController:
             if old_value in ['PLAYING', 'PAUSED_PLAYBACK'] and new_value == 'STOPPED':
                 if self.current_video_position >= self.current_video_duration - 2 * self.device.sync_remote_player_interval:
                     # 只对播放文件末尾时间进行处理
-
-                    left_time = self.current_video_duration - self.current_video_position
-                    if left_time > 0:
-                        logging.debug('wait ' + str(left_time) + ' s')
-                        time.sleep(left_time)
+                    wait_interval(self.current_video_duration, 0, self.current_video_position)
 
                     if self.current_idx < len(self.file_list):
                         logging.debug('play next video')
