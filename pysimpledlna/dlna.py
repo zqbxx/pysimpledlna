@@ -20,7 +20,7 @@ import traceback
 import logging
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
-    to_seconds,
+    to_seconds, wait_interval,
     ThreadStatus)
 
 
@@ -543,4 +543,4 @@ class DlnaDeviceSyncThread(EasyThread):
             'position_info': position_info
         }
         self.count += 1
-        self.wait_interval(start, time.time())
+        wait_interval(self.interval, start, time.time())
