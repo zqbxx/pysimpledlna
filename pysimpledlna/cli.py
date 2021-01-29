@@ -8,18 +8,22 @@ from pysimpledlna.ac import ActionController
 
 
 _DLNA_SERVER = SimpleDLNAServer(9000)
-_DLNA_SERVER.start_server()
 
 
 def main():
+    _DLNA_SERVER.start_server()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
+
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
-    subparsers = parser.add_subparsers(help='命令')
+
+    subparsers = parser.add_subparsers(help='DLAN Server')
     _, list_parser = create_list_parser(subparsers)
     wrap_parser_exit(list_parser)
+
     _, play_parser = create_play_parser(subparsers)
     wrap_parser_exit(play_parser)
+
     args = parser.parse_args()
     try:
         args.func(args)
@@ -39,22 +43,25 @@ def wrap_parser_exit(parser: argparse.ArgumentParser):
 
 def create_list_parser(subparsers):
     command = 'list'
-    list_parser = subparsers.add_parser(command, help='list dlna device')
-    list_parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
-    list_parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int,
+    parser = subparsers.add_parser(command, help='list dlna device')
+    parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
+    parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int,
                              help='maximum number of dlna device')
-    list_parser.set_defaults(func=list_device)
-    return command, list_parser
+    parser.set_defaults(func=list_device)
+    return command, parser
 
 
 def create_play_parser(subparsers):
     command = 'play'
-    play_parser = subparsers.add_parser(command, help='play a video')
-    play_parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+',  help='video file')
-    play_parser.add_argument('-u', '--url', dest='url', required=True, type=str,
+    parser = subparsers.add_parser(command, help='play a video')
+    parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+',  help='视频文件')
+    group = parser.add_mutually_exclusive_group()
+
+    group.add_argument('-u', '--url', dest='url', type=str,
                              help='dlna device url')
-    play_parser.set_defaults(func=play)
-    return command, play_parser
+    group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=True, help='自动选择第一台设备作为播放设备')
+    parser.set_defaults(func=play)
+    return command, parser
 
 
 def list_device(args):
@@ -70,14 +77,21 @@ def list_device(args):
 def play(args):
 
     dlna_server = _DLNA_SERVER
-    url = args.url
-    file_list = args.input
 
+    device: Device = None
+    if args.auto_selected:
+        for i, d in enumerate(dlna_server.get_devices(5)):
+            device = d
+            break
+    else:
+        url = args.url
+        device = dlna_server.parse_xml(url)
+
+    dlna_server.register_device(device)
+
+    file_list = args.input
     if len(file_list) == 0:
         return
-
-    device = dlna_server.parse_xml(url)
-    dlna_server.register_device(device)
 
     ac = ActionController(file_list, device)
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook)
@@ -103,6 +117,7 @@ def signal_handler(signal, frame):
 
 class ServiceExit(Exception):
     pass
+
 
 
 if __name__ == "__main__":
