@@ -1,6 +1,8 @@
 from xml.dom.minidom import Childless
 from enum import Enum
 import time
+import os
+import appdirs
 
 
 class ThreadStatus(Enum):
@@ -42,3 +44,21 @@ def to_seconds(t: str) -> int:
         return 0
     return s
 
+
+def get_user_data_dir():
+    user_dir = appdirs.user_data_dir('pysimpledlna', 'wx_c')
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+    return os.path.abspath(user_dir)
+
+
+def get_desktop_dir():
+
+    import winreg
+
+    key = winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+    )
+    desktop, _ = winreg.QueryValueEx(key, 'Desktop')
+    return desktop
