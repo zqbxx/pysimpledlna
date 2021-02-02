@@ -5,13 +5,15 @@ import logging
 
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
+from pysimpledlna.utils import get_free_tcp_port
 
-
-_DLNA_SERVER = SimpleDLNAServer(9000)
+_DLNA_SERVER_PORT = get_free_tcp_port()
+_DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
+_DLNA_SERVER.start_server()
 
 
 def main():
-    _DLNA_SERVER.start_server()
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
 
     parser = argparse.ArgumentParser()
@@ -117,7 +119,6 @@ def signal_handler(signal, frame):
 
 class ServiceExit(Exception):
     pass
-
 
 
 if __name__ == "__main__":

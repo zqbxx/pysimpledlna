@@ -3,6 +3,7 @@ from enum import Enum
 import time
 import os
 import appdirs
+import socket
 
 
 class ThreadStatus(Enum):
@@ -62,3 +63,11 @@ def get_desktop_dir():
     )
     desktop, _ = winreg.QueryValueEx(key, 'Desktop')
     return desktop
+
+
+def get_free_tcp_port():
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(('', 0))
+    addr, port = tcp.getsockname()
+    tcp.close()
+    return port
