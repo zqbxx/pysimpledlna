@@ -78,6 +78,7 @@ class ActionController:
         server_file_path = self.device.add_file(file_path)
         self.device.set_AV_transport_URI(server_file_path)
         self.device.play()
+        time.sleep(0.5)
         self.ensure_player_is_playing()
         self.player.player_status = PlayerStatus.PLAY
         self.current_idx += 1
