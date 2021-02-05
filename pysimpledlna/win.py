@@ -26,6 +26,8 @@ def main():
 
     if action == 'install':
         install()
+    elif action == 'uninstall':
+        uninstall()
     else:
         play()
 
@@ -74,15 +76,6 @@ def uninstall():
     os.system(uninstall_context_menu_file_path)
 
     input('press any key to continue')
-
-
-def copy_to_user_dir(pkg_path, file_name):
-    file_data = pkgutil.get_data("pysimpledlna", pkg_path)
-    user_dir = get_user_data_dir()
-    target_file_path = os.path.join(user_dir, file_name)
-    with open(target_file_path, 'wb') as f:
-        f.write(file_data)
-    return target_file_path
 
 
 if __name__ == '__main__':
