@@ -35,7 +35,7 @@ class Player:
         text += self.player_status.value
         text += ' current: '
         text_columns = sum(wcwidth(c) for c in text)
-        remain_columns = columns - text_columns
+        remain_columns = columns - text_columns - 5
         if remain_columns > 0:
             name_columns = sum(wcwidth(c) for c in self._video_file_name)
             if name_columns <= remain_columns:
