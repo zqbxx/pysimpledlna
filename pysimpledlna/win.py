@@ -43,9 +43,16 @@ def play():
     file_list = [os.path.join(path, f) for f in os.listdir(path)
                  if f.endswith('.mp4') or f.endswith('.mkv')]
 
-    sys.argv = [current_file, 'play', '-i'] + file_list
+    for file_path in file_list:
+        print(os.path.split(file_path)[1])
 
-    cli_main()
+    sys.argv = [current_file, 'play', '-a', '-i'] + file_list
+
+    try:
+        cli_main()
+    finally:
+        input('\n press any key to continue')
+        sys.exit()
 
 
 def install():
