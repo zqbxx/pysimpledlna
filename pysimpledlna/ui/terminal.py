@@ -8,9 +8,9 @@ from prompt_toolkit import prompt
 
 class PlayerStatus(Enum):
     # Courier New
-    STOP = '■'
-    PLAY = '►'
-    PAUSE = '═'
+    STOP = 'Stop'
+    PLAY = 'Play'
+    PAUSE = 'Pause'
 
 
 class Player:
@@ -24,7 +24,6 @@ class Player:
         self._cur_pos = 0
 
         self.pause = False
-
 
     def draw(self):
 
@@ -51,6 +50,9 @@ class Player:
                     text += ' ' * (remain_columns - name_columns)
 
         stdout.write(text)
+
+    def new_player(self):
+        stdout.write('\n')
 
     def format_time(self, seconds) -> str:
         m, s = divmod(seconds, 60)

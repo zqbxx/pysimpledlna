@@ -53,6 +53,7 @@ class ActionController:
 
                     if self.current_idx < len(self.file_list):
                         logging.debug('play next video')
+                        self.player.new_player()
                         self.play_next()
                     else:
                         self.stop_device()
