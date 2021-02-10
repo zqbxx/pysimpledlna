@@ -8,9 +8,9 @@ from prompt_toolkit import prompt
 
 class PlayerStatus(Enum):
     # Courier New
-    STOP = '■'
-    PLAY = '►'
-    PAUSE = '═'
+    STOP = 'Stop'
+    PLAY = 'Play'
+    PAUSE = 'Pause'
 
 
 class Player:
@@ -25,7 +25,6 @@ class Player:
 
         self.pause = False
 
-
     def draw(self):
 
         columns, lines = shutil.get_terminal_size((80, 20))
@@ -35,7 +34,7 @@ class Player:
         text += self.player_status.value
         text += ' current: '
         text_columns = sum(wcwidth(c) for c in text)
-        remain_columns = columns - text_columns
+        remain_columns = columns - text_columns - 5
         if remain_columns > 0:
             name_columns = sum(wcwidth(c) for c in self._video_file_name)
             if name_columns <= remain_columns:
@@ -51,6 +50,9 @@ class Player:
                     text += ' ' * (remain_columns - name_columns)
 
         stdout.write(text)
+
+    def new_player(self):
+        stdout.write('\n')
 
     def format_time(self, seconds) -> str:
         m, s = divmod(seconds, 60)

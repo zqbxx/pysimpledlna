@@ -61,7 +61,7 @@ def create_play_parser(subparsers):
 
     group.add_argument('-u', '--url', dest='url', type=str,
                              help='dlna device url')
-    group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=True, help='自动选择第一台设备作为播放设备')
+    group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False, help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=play)
     return command, parser
 
@@ -87,7 +87,13 @@ def play(args):
             break
     else:
         url = args.url
-        device = dlna_server.parse_xml(url)
+        if url is None:
+            device = None
+        else:
+            device = dlna_server.parse_xml(url)
+    if device is None:
+        print('No Device available')
+        return
 
     dlna_server.register_device(device)
 
