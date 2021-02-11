@@ -3,7 +3,7 @@ import pkgutil
 import socket
 import threading
 import urllib.request as urllibreq
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
 
@@ -14,7 +14,6 @@ from twisted.web.server import Site
 from twisted.web.static import File
 
 from threading import Thread, Event
-from enum import Enum, IntEnum, unique
 import time
 import traceback
 import logging
@@ -56,7 +55,6 @@ class SimpleDLNAServer():
         if self.is_server_started:
             reactor.stop()
             self.is_server_started = False
-
 
     def add_file_to_server(self, device, file_path):
 
@@ -150,7 +148,6 @@ class SimpleDLNAServer():
         except Exception as e:
             print(e)
             return None
-
 
     def get_devices(self, timeout=10):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)

@@ -3,7 +3,6 @@ import os
 from enum import Enum
 import shutil
 from wcwidth import wcwidth
-from prompt_toolkit import prompt
 
 
 class PlayerStatus(Enum):

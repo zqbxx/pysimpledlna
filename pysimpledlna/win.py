@@ -1,11 +1,9 @@
 import sys
 import os
-import pkgutil
 import sysconfig
 
 from pysimpledlna.cli import main as cli_main
-from pysimpledlna.utils import get_user_data_dir, get_desktop_dir
-import subprocess
+from pysimpledlna.utils import get_desktop_dir
 
 install_reg = '''Windows Registry Editor Version 5.00
 

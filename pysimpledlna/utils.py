@@ -36,6 +36,7 @@ def wait_interval(interval, start, end):
         time.sleep(rest)
     return rest
 
+
 def to_seconds(t: str) -> int:
     s = 0
     a = t.split(':')
