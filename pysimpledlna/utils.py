@@ -47,6 +47,12 @@ def to_seconds(t: str) -> int:
     return s
 
 
+def format_time(seconds) -> str:
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return "%02d:%02d:%02d" % (h, m, s)
+
+
 def get_user_data_dir():
     user_dir = appdirs.user_data_dir('pysimpledlna', 'wx_c')
     if not os.path.exists(user_dir):

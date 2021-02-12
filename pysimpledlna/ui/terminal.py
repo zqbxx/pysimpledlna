@@ -4,9 +4,11 @@ from enum import Enum
 import shutil
 from wcwidth import wcwidth
 
+from pysimpledlna.utils import format_time
+
 
 class PlayerStatus(Enum):
-    # Courier New
+
     STOP = 'Stop'
     PLAY = 'Play'
     PAUSE = 'Pause'
@@ -29,7 +31,7 @@ class Player:
         columns, lines = shutil.get_terminal_size((80, 20))
 
         text = '\r'
-        text += self.format_time(self.cur_pos) + '/' + self.format_time(self.duration) + ' | '
+        text += format_time(self.cur_pos) + '/' + format_time(self.duration) + ' | '
         text += self.player_status.value
         text += ' current: '
         text_columns = sum(wcwidth(c) for c in text)
@@ -52,11 +54,6 @@ class Player:
 
     def new_player(self):
         stdout.write('\n')
-
-    def format_time(self, seconds) -> str:
-        m, s = divmod(seconds, 60)
-        h, m = divmod(m, 60)
-        return "%02d:%02d:%02d" % (h, m, s)
 
     @property
     def duration(self):
