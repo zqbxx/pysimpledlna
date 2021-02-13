@@ -1,0 +1,5 @@
+twisted>=16.2.0
+lxml
+appdirs
+requests
+wcwidth

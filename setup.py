@@ -1,43 +1,61 @@
 # coding=utf-8
 
-from setuptools import setup
+from setuptools import setup, find_packages
+from io import StringIO, open
+
+
+def read_file(filename):
+    with open(filename, 'r', encoding='UTF-8') as fp:
+        return fp.read().strip()
+
+
+def read_requirements(filename):
+    return [line.strip() for line in read_file(filename).splitlines()
+            if not line.startswith('#')]
+
+
+def read_README(filename):
+    # Ignore unsupported directives by pypi.
+    content = read_file(filename)
+    return ''.join(line for line in StringIO(content)
+                   if not line.startswith('.. comment::'))
+
 
 setup(
-    name="pysimpledlna",  #pypi中的名称，pip或者easy_install安装时使用的名称
-    version="0.0.1",
+    name="pysimpledlna",
+    version="0.3.0",
     author="wx c",
     description=("PySimpleDlna is a dlna server. It allows you to stream your videos to devices on your connected home network."),
     license="MIT",
     keywords="dlna",
-    url="",
+    url="https://github.com/zqbxx/pysimpledlna",
 
-    # 需要安装的依赖
-    install_requires=[
-        'twisted>=16.2.0','lxml'
-    ],
+    python_requires='>=3.7',
+
+    install_requires=read_requirements('requirements.txt'),
 
     entry_points={
         'console_scripts': [
             'pysimpledlna = pysimpledlna.cli:main',
+            'pysimpledlnaW = pysimpledlna.win:main',
         ]
     },
 
-    packages=['pysimpledlna'],
+    packages=find_packages(),
     package_dir={'pysimpledlna': 'pysimpledlna'},
     package_data={'pysimpledlna': ['templates/*.xml']},
 
-    #long_description=read('README.md'),
-    classifiers=[  # 程序的所属分类列表
+    long_description=read_README('README.md'),
+    classifiers=[
         'Development Status :: 3 - Alpha',
         "Topic :: ",
         'Environment :: Console',
         'Intended Audience :: Developers',
         'Intended Audience :: End Users/Desktop',
         "License :: MIT",
-        'Natural Language :: English',
+        'Natural Language :: Chinese',
         'Operating System :: OS Independent',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.7',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Multimedia :: Sound/Audio',
         'Topic :: Multimedia :: Video',
