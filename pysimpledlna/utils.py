@@ -4,6 +4,7 @@ import time
 import os
 import appdirs
 import socket
+import json
 
 
 class ThreadStatus(Enum):
@@ -60,6 +61,13 @@ def get_user_data_dir():
     return os.path.abspath(user_dir)
 
 
+def get_playlist_dir(base, playlist):
+    full_path = os.path.join(base, playlist)
+    if not os.path.exists(full_path):
+        os.makedirs(full_path)
+    return os.path.abspath(full_path)
+
+
 def get_desktop_dir():
 
     import winreg
@@ -78,3 +86,62 @@ def get_free_tcp_port():
     addr, port = tcp.getsockname()
     tcp.close()
     return port
+
+
+class Playlist:
+
+    def __init__(self, file_path, min_save_interval=30):
+        self.file_path = file_path
+        self._current_index = 0
+        self._current_pos = 0
+        self._file_list = []
+        self.min_save_interval = min_save_interval
+        self.last_save = 0
+
+    def load_playlist(self):
+        if not os.path.isfile(self.file_path):
+            return
+        jo = json.load(self.file_path)
+        if jo.get('current_index') is not None:
+            self._current_index = int(jo.get('current_index'))
+        if jo.get('current_pos') is not None:
+            self._current_index = int(jo.get('current_pos'))
+        if jo.get('file_list') is not None:
+            self._current_index = jo.get('file_list')
+
+    def save_playlist(self, force=False):
+        current = time.time()
+        interval = current - self.last_save
+        if force or interval >= self.min_save_interval:
+            json_str = json.dumps({
+                "current_index": self._current_index,
+                "current_pos": self._current_pos,
+                "file_list": self._file_list,
+            }, ensure_ascii=False, indent=2)
+            with open(self.file_path, 'w', encoding="utf-8") as fp:
+                fp.write(json_str)
+            self.last_save = current
+
+    @property
+    def current_index(self):
+        return self._current_index
+
+    @current_index.setter
+    def current_index(self, current_index):
+        self._current_index = current_index
+
+    @property
+    def current_pos(self):
+        return self._current_pos
+
+    @current_pos.setter
+    def current_pos(self, current_pos):
+        self._current_pos = current_pos
+
+    @property
+    def file_list(self):
+        return self._file_list
+
+    @file_list.setter
+    def file_list(self, file_list):
+        self._file_list = file_list

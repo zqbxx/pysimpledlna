@@ -2,10 +2,15 @@ import argparse
 import time
 import signal
 import logging
-
+import os
+import re
+import fnmatch
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
-from pysimpledlna.utils import get_free_tcp_port
+from pysimpledlna.utils import (
+    Playlist, get_playlist_dir, get_user_data_dir, get_free_tcp_port
+)
+
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
 _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
@@ -25,6 +30,13 @@ def main():
 
     _, play_parser = create_play_parser(subparsers)
     wrap_parser_exit(play_parser)
+
+    _, playlist_parser = create_playlist_parser(subparsers)
+    playlist_subparsers = playlist_parser.add_subparsers(help='playlist')
+    wrap_parser_exit(playlist_parser)
+
+    _, playlist_create_parser = create_playlist_create_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_create_parser)
 
     args = parser.parse_args()
     try:
@@ -63,6 +75,22 @@ def create_play_parser(subparsers):
                              help='dlna device url')
     group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False, help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=play)
+    return command, parser
+
+
+def create_playlist_parser(subparsers):
+    command = 'playlist'
+    return command, subparsers.add_parser(command, help='play a video')
+
+
+def create_playlist_create_parser(subparsers):
+    command = 'create'
+    parser = subparsers.add_parser(command, help='create playlist')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='playlist name')
+    parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+', help='folders')
+    parser.add_argument('-f', '--filter', dest='filter', required=False, type=str, help='filter')
+    parser.set_defaults(func=playlist_create)
+
     return command, parser
 
 
@@ -112,6 +140,26 @@ def play(args):
     except:
         stop_device(device)
         dlna_server.stop_server()
+
+
+def playlist_create(args):
+    user_dir = get_user_data_dir()
+    play_list_dir = get_playlist_dir(user_dir, 'playlist')
+    play_list_name = args.name
+    input_dirs: [] = args.input
+    filename_filter: str = args.filter
+    pattern = None
+    if filename_filter is not None:
+        regex = fnmatch.translate(filename_filter)
+        pattern = re.compile(regex)
+    files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
+             if pattern is not None and pattern.search(file_name) is not None]
+    play_list_file = os.path.join(play_list_dir, play_list_name + '.playlist')
+    pl = Playlist(play_list_file)
+    pl._file_list = files
+    pl.save_playlist()
+
+    logging.info('playlist saved at:' + play_list_file)
 
 
 def stop_device(device: Device):
