@@ -26,6 +26,8 @@ class Player:
 
         self.pause = False
 
+        self._excpetion: Exception = None
+
     def draw(self):
 
         columns, lines = shutil.get_terminal_size((80, 20))
@@ -37,16 +39,22 @@ class Player:
         text_columns = sum(wcwidth(c) for c in text)
         remain_columns = columns - text_columns - 5
         if remain_columns > 0:
-            name_columns = sum(wcwidth(c) for c in self._video_file_name)
+
+            msg = self._video_file_name
+
+            if self._excpetion is not None:
+                msg = str(self._excpetion)
+
+            name_columns = sum(wcwidth(c) for c in msg)
             if name_columns <= remain_columns:
-                text += self._video_file_name
+                text += msg
                 text += ' ' * (remain_columns - name_columns)
             else:
                 # 剩余空间太小就不显示
                 if remain_columns > 5:
                     # 截取头部和尾部显示
                     part_len = int((remain_columns-2)/2)
-                    text += self._video_file_name[:part_len-1] + '..' + self._video_file_name[-part_len+1:]
+                    text += msg[:part_len-1] + '..' + msg[-part_len+1:]
                 else:
                     text += ' ' * (remain_columns - name_columns)
 
@@ -54,6 +62,14 @@ class Player:
 
     def new_player(self):
         stdout.write('\n')
+
+    @property
+    def exception(self):
+        return self._excpetion
+
+    @exception.setter
+    def exception(self, e: Exception):
+        self._excpetion = e
 
     @property
     def duration(self):

@@ -217,7 +217,7 @@ class Device():
                  , avtranspor_action_url, rendering_action_url
                  , manufacturer , manufacturer_url, st, device_key
                  , sync_remote_player_interval=1
-                 , positionhook=None, transportstatehook=None):
+                 , positionhook=None, transportstatehook=None, exceptionhook=None):
 
         self.dlna_server = dlna_server
 
@@ -232,6 +232,7 @@ class Device():
         self.device_key = device_key
         self.positionhook = positionhook
         self.transportstatehook = transportstatehook
+        self.exceptionhook = exceptionhook
         self.sync_remote_player_interval = sync_remote_player_interval
 
         self.video_files = self.dlna_server.get_device_root(self)
@@ -386,7 +387,6 @@ class Device():
 
             return ret_data
         except Exception as e:
-            print(content)
             raise e
 
 
@@ -492,9 +492,11 @@ class DlnaDeviceSyncThread(EasyThread):
         try:
             transport_info = self.device.transport_info()
             position_info = self.device.position_info()
-        except:
+        except Exception as e:
             # 播放器的异常，不处理，可能是尚未准备就绪
-            traceback.print_exc()
+            if self.device.exceptionhook is not None:
+                self.device.exceptionhook(e)
+            #traceback.print_exc()
             if self.count < 5:
                 # 第一次播放时远程播放器可能无法获得position_info
                 # 停止播放并重启

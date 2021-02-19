@@ -30,10 +30,15 @@ class ActionController:
         self.device.stop_sync_remote_player_status()
         self.device.stop()
 
+    def excpetions(self, e: Exception):
+        self.player.exception = e
+        self.player.draw()
+
+
     def hook(self, type, old_value, new_value):
 
         logging.debug('type: ' + type + ' old:' + str(old_value) + ' new:' + str(new_value))
-
+        self.player.exception = None
         if type == 'CurrentTransportState':
             logging.debug('try play next video:')
             logging.debug('current_video_position:' + str(self.current_video_position))
