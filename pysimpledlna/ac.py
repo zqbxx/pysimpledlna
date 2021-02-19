@@ -30,10 +30,9 @@ class ActionController:
         self.device.stop_sync_remote_player_status()
         self.device.stop()
 
-    def excpetions(self, e: Exception):
+    def excpetionhook(self, e: Exception):
         self.player.exception = e
         self.player.draw()
-
 
     def hook(self, type, old_value, new_value):
 

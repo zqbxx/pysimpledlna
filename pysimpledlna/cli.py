@@ -130,7 +130,7 @@ def play(args):
         return
 
     ac = ActionController(file_list, device)
-    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook)
+    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
     device.start_sync_remote_player_status()
     ac.start_play()
     signal.signal(signal.SIGINT, signal_handler)

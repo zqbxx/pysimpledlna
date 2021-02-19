@@ -253,9 +253,10 @@ class Device():
         self.sync_remote_player_interval = interval
         self.sync_thread.interval = interval
 
-    def set_sync_hook(self, positionhook, transportstatehook):
+    def set_sync_hook(self, positionhook, transportstatehook, exceptionhook):
         self.positionhook = positionhook
         self.transportstatehook = transportstatehook
+        self.exceptionhook = exceptionhook
 
     def start_sync_remote_player_status(self):
         if self.sync_thread:
@@ -500,10 +501,13 @@ class DlnaDeviceSyncThread(EasyThread):
             if self.count < 5:
                 # 第一次播放时远程播放器可能无法获得position_info
                 # 停止播放并重启
-                self.device.stop()
-                self.count = 0
-                time.sleep(1)
-                self.device.play()
+                try:
+                    self.device.stop()
+                    self.count = 0
+                    time.sleep(1)
+                    self.device.play()
+                except Exception as e:
+                    self.device.exceptionhook(e)
             else:
                 self.wait_interval(start, time.time())
             return
