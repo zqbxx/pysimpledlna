@@ -94,6 +94,15 @@ def create_playlist_create_parser(subparsers):
     return command, parser
 
 
+def create_playlist_delete_parser(subparsers):
+    command = 'delete'
+    parser = subparsers.add_parser(command, help='create playlist')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='playlist name')
+    parser.set_defaults(func=playlist_delete)
+
+    return command, parser
+
+
 def list_device(args):
     dlna_server = _DLNA_SERVER
     device_found = False
@@ -143,9 +152,7 @@ def play(args):
 
 
 def playlist_create(args):
-    user_dir = get_user_data_dir()
-    play_list_dir = get_playlist_dir(user_dir, 'playlist')
-    play_list_name = args.name
+    play_list_file = get_playlist_file_path(args)
     input_dirs: [] = args.input
     filename_filter: str = args.filter
     pattern = None
@@ -154,12 +161,31 @@ def playlist_create(args):
         pattern = re.compile(regex)
     files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
              if pattern is not None and pattern.search(file_name) is not None]
-    play_list_file = os.path.join(play_list_dir, play_list_name + '.playlist')
     pl = Playlist(play_list_file)
     pl._file_list = files
     pl.save_playlist()
 
-    logging.info('playlist saved at:' + play_list_file)
+    logging.info('播放列表已保存:' + play_list_file)
+
+
+def playlist_delete(args):
+    play_list_file = get_playlist_file_path(args)
+    if not os.path.exists(play_list_file):
+        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
+        return
+    if os.path.isfile(play_list_file):
+        os.remove(play_list_file)
+        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
+        return
+    logging.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
+
+
+def get_playlist_file_path(args):
+    user_dir = get_user_data_dir()
+    play_list_dir = get_playlist_dir(user_dir, 'playlist')
+    play_list_name = args.name
+    play_list_file = os.path.join(play_list_dir, play_list_name + '.playlist')
+    return play_list_file
 
 
 def stop_device(device: Device):
