@@ -12,6 +12,7 @@ pysimpledlna
 ------
 ```
 git clone https://github.com/zqbxx/pysimpledlna.git
+cd pysimpledlna
 py setup.py install
 ```
 
