@@ -5,6 +5,8 @@ import logging
 import os
 import re
 import fnmatch
+import os
+print(os.getenv('PYTHONPATH'))
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
@@ -13,8 +15,9 @@ from pysimpledlna.utils import (
 
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
+_DLNA_SERVER_PORT = 8000
 _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
-_DLNA_SERVER.start_server()
+
 
 
 def main():
@@ -38,8 +41,12 @@ def main():
     _, playlist_create_parser = create_playlist_create_parser(playlist_subparsers)
     wrap_parser_exit(playlist_create_parser)
 
+    _, playlist_play_parser = create_playlist_play_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_play_parser)
+
     args = parser.parse_args()
     try:
+        _DLNA_SERVER.start_server()
         args.func(args)
     finally:
         _DLNA_SERVER.stop_server()
@@ -71,8 +78,7 @@ def create_play_parser(subparsers):
     parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+',  help='视频文件')
     group = parser.add_mutually_exclusive_group()
 
-    group.add_argument('-u', '--url', dest='url', type=str,
-                             help='dlna device url')
+    group.add_argument('-u', '--url', dest='url', type=str, help='dlna device url')
     group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False, help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=play)
     return command, parser
@@ -97,8 +103,22 @@ def create_playlist_create_parser(subparsers):
 def create_playlist_delete_parser(subparsers):
     command = 'delete'
     parser = subparsers.add_parser(command, help='create playlist')
-    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='playlist name')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.set_defaults(func=playlist_delete)
+
+    return command, parser
+
+
+def create_playlist_play_parser(subparsers):
+    command = 'play'
+    parser = subparsers.add_parser(command, help='paly a playlist')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    group = parser.add_mutually_exclusive_group()
+
+    group.add_argument('-u', '--url', dest='url', type=str, help='dlna设备地址')
+    group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False,
+                       help='自动选择第一台设备作为播放设备')
+    parser.set_defaults(func=playlist_play)
 
     return command, parser
 
@@ -178,6 +198,127 @@ def playlist_delete(args):
         logging.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
         return
     logging.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
+
+
+def playlist_play(args):
+
+    from pysimpledlna.ui.playlist import (
+        PlayListPlayer, PlayerModel,
+        VideoPositionFormatter, VideoControlFormatter, VideoFileFormatter)
+    from prompt_toolkit_ext.widgets import RadioList
+    from prompt_toolkit.shortcuts.progress_bar.formatters import Text
+    from pysimpledlna.ui.terminal import PlayerStatus
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.patch_stdout import patch_stdout
+    from prompt_toolkit import HTML
+
+    dlna_server = _DLNA_SERVER
+
+    device: Device = None
+    if args.auto_selected:
+        for i, d in enumerate(dlna_server.get_devices(5)):
+            device = d
+            break
+    else:
+        url = args.url
+        if url is None:
+            device = None
+        else:
+            device = dlna_server.parse_xml(url)
+    if device is None:
+        print('No Device available')
+        return
+
+    dlna_server.register_device(device)
+
+    play_list_file = get_playlist_file_path(args)
+    if not os.path.exists(play_list_file):
+        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
+        return
+
+    play_list = Playlist(play_list_file)
+    play_list.load_playlist()
+    file_list = play_list.file_list
+    playlist_values = [(f, os.path.split(f)[1]) for f in file_list]
+    playlist_contents = RadioList(values=playlist_values)
+
+    formatters = [
+        Text(" "),
+        VideoPositionFormatter(),
+        Text(" | "),
+        VideoControlFormatter(),
+        Text(" "),
+        VideoFileFormatter()
+    ]
+    title_toolbar = HTML('<b>[n]</b>播放列表<b>[m]</b>进度条')
+    bottom_toolbar = HTML('<b>[q]</b>退出<b>[p]</b>暂停')
+    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar, title=title_toolbar)
+    player_model: PlayerModel = player.create_model()
+    ac = ActionController(file_list, device, player_model)
+
+    def on(type, old_value, new_value):
+        if type == 'selected':
+
+            old_file_path = old_value[0]
+            old_file_name = old_value[1]
+
+            new_file_path = new_value[0]
+            new_file_name = new_value[1]
+
+            if os.path.samefile(old_file_path, new_file_path):
+                return True
+
+            selected_index = playlist_contents.get_selected_index()
+
+            ac.current_idx = selected_index
+            ac.play_next()
+        return True
+
+    playlist_contents.add_enter_handle(on)
+
+    kb = KeyBindings()
+
+    @kb.add("q")
+    def _(event):
+        " Quit application. "
+        #event.app.exit()
+        player.exit()
+        player_model.player_status = PlayerStatus.STOP
+        ac.stop_device()
+
+    @kb.add("n")
+    def _(event):
+        event.app.layout.focus(player.get_left_part())
+
+    @kb.add("m")
+    def _(event):
+        event.app.layout.focus(player.get_right_part())
+
+    @kb.add('p')
+    def _(event):
+        if player_model.player_status == PlayerStatus.PAUSE:
+            player_model.player_status = PlayerStatus.PLAY
+        elif player_model.player_status == PlayerStatus.PLAY:
+            player_model.player_status = PlayerStatus.PAUSE
+
+    player.key_bindings = kb
+    player.create_ui()
+
+    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
+    device.start_sync_remote_player_status()
+
+    with patch_stdout():
+        ac.start_play()
+
+    try:
+        while True:
+            if ac.end:
+                break
+            time.sleep(0.5)
+    finally:
+        device.stop_sync_remote_player_status()
+        dlna_server.stop_server()
+        player.clear()
 
 
 def get_playlist_file_path(args):

@@ -13,7 +13,7 @@ class ActionController:
     '''
     自己实现连续播放多个文件的功能，部分DLNA设备没有实现用于连续播放的接口
     '''
-    def __init__(self, file_list, device: Device):
+    def __init__(self, file_list, device: Device, player=Player()):
         self.current_idx = 0
         self.file_list = file_list
         self.device = device
@@ -21,7 +21,9 @@ class ActionController:
         self.current_video_position = 0
         self.current_video_duration = 0
 
-        self.player = Player()
+        self.player = player
+
+        self.end = False
 
     def start_play(self):
         self.play_next()
@@ -29,6 +31,7 @@ class ActionController:
     def stop_device(self):
         self.device.stop_sync_remote_player_status()
         self.device.stop()
+        self.end = True
 
     def excpetionhook(self, e: Exception):
         self.player.exception = e
@@ -81,19 +84,22 @@ class ActionController:
         self.player.duration = 0
         self.player.cur_pos = 0
         server_file_path = self.device.add_file(file_path)
-        self.device.set_AV_transport_URI(server_file_path)
-        self.device.play()
-        time.sleep(0.5)
-        self.ensure_player_is_playing()
-        self.player.player_status = PlayerStatus.PLAY
-        self.current_idx += 1
+
+        positionhook, transportstatehook, exceptionhook = self._remove_hooks()
+
+        try:
+            self.device.stop()
+            self.device.set_AV_transport_URI(server_file_path)
+            self.device.play()
+            self.ensure_player_is_playing()
+            self.player.player_status = PlayerStatus.PLAY
+            self.current_idx += 1
+        finally:
+            self._restore_hooks(exceptionhook, positionhook, transportstatehook)
 
     def ensure_player_is_playing(self):
 
-        transportstatehook = self.device.transportstatehook
-        positionhook = self.device.positionhook
-        self.device.transportstatehook = None
-        self.device.positionhook = None
+        positionhook, transportstatehook, exceptionhook = self._remove_hooks()
 
         try:
             for i in range(60):
@@ -105,5 +111,18 @@ class ActionController:
                 dur = time.time() - start
                 time.sleep((1 - dur))
         finally:
-            self.device.transportstatehook = transportstatehook
-            self.device.positionhook = positionhook
+            self._restore_hooks(exceptionhook, positionhook, transportstatehook)
+
+    def _remove_hooks(self):
+        transportstatehook = self.device.transportstatehook
+        positionhook = self.device.positionhook
+        exceptionhook = self.device.exceptionhook
+        self.device.transportstatehook = None
+        self.device.positionhook = None
+        self.device.exceptionhook = None
+        return positionhook, transportstatehook, exceptionhook
+
+    def _restore_hooks(self, exceptionhook, positionhook, transportstatehook):
+        self.device.transportstatehook = transportstatehook
+        self.device.positionhook = positionhook
+        self.device.exceptionhook = exceptionhook
