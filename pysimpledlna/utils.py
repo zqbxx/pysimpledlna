@@ -101,13 +101,15 @@ class Playlist:
     def load_playlist(self):
         if not os.path.isfile(self.file_path):
             return
-        jo = json.load(self.file_path)
+        jo = None
+        with open(self.file_path, 'r', encoding="utf-8") as f:
+            jo = json.load(f)
         if jo.get('current_index') is not None:
             self._current_index = int(jo.get('current_index'))
         if jo.get('current_pos') is not None:
             self._current_index = int(jo.get('current_pos'))
         if jo.get('file_list') is not None:
-            self._current_index = jo.get('file_list')
+            self._file_list = jo.get('file_list')
 
     def save_playlist(self, force=False):
         current = time.time()
