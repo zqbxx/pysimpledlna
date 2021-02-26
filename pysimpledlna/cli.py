@@ -15,9 +15,7 @@ from pysimpledlna.utils import (
 
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
-_DLNA_SERVER_PORT = 8000
 _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
-
 
 
 def main():
@@ -42,6 +40,9 @@ def main():
     wrap_parser_exit(playlist_create_parser)
 
     _, playlist_play_parser = create_playlist_play_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_play_parser)
+
+    _, playlist_list_parser = create_playlist_list_parser(playlist_subparsers)
     wrap_parser_exit(playlist_play_parser)
 
     args = parser.parse_args()
@@ -111,7 +112,7 @@ def create_playlist_delete_parser(subparsers):
 
 def create_playlist_play_parser(subparsers):
     command = 'play'
-    parser = subparsers.add_parser(command, help='paly a playlist')
+    parser = subparsers.add_parser(command, help='播放播放列表中的文件')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     group = parser.add_mutually_exclusive_group()
 
@@ -119,6 +120,14 @@ def create_playlist_play_parser(subparsers):
     group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False,
                        help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=playlist_play)
+
+    return command, parser
+
+
+def create_playlist_list_parser(subparsers):
+    command = 'list'
+    parser = subparsers.add_parser(command, help='列出所有播放列表')
+    parser.set_defaults(func=playlist_list)
 
     return command, parser
 
@@ -198,6 +207,20 @@ def playlist_delete(args):
         logging.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
         return
     logging.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
+
+
+def playlist_list(args):
+    user_dir = get_user_data_dir()
+    play_list_dir = get_playlist_dir(user_dir, 'playlist')
+    play_list = [ os.path.splitext(f)[0] for f in os.listdir(play_list_dir) if os.path.isfile(os.path.join(play_list_dir, f)) and f.endswith('.playlist')]
+
+    print('播放列表目录：', play_list_dir)
+
+    if len(play_list) == 0:
+        print('没有播放列表')
+
+    for i, pl in enumerate(play_list):
+        print('[' + str(i) + ']', pl)
 
 
 def playlist_play(args):
