@@ -21,7 +21,7 @@ import os
 
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.widgets import Box
+from prompt_toolkit.widgets import Box, Label, Button
 from typing import Optional, Sequence, Tuple
 
 
@@ -40,6 +40,10 @@ class PlayListPlayer(Progress):
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.left_part = None
         self.right_part = None
+        self.progress_controls_part = None
+        self.player_controls_part = None
+        self.player_controls_keybindings = None
+        self.player_controls_cp = None
         self.playlist_part: RadioList = playlist_part
         self.top_text: Tuple[str] = top_text
 
@@ -52,7 +56,35 @@ class PlayListPlayer(Progress):
         return model
 
     def create_content(self, progress_controls):
-        self.right_part = super().create_content(progress_controls)
+
+        self.progress_controls_part = super().create_content(progress_controls)
+        self.player_controls_cp = FormattedTextControl(
+                ' ',
+                key_bindings=self.player_controls_keybindings,
+                focusable=True,
+            )
+
+        self.player_controls_part = VSplit([
+            Label(text="[PgUp] 上一个"),
+            Label(text="[<] 后退"),
+            Label(text="[p] 暂停/播放"),
+            Label(text="[>] 前进"),
+            Label(text="[PgDn] 下一个"),
+            Window(
+                self.player_controls_cp,
+                height=1,
+                dont_extend_width=True,
+                dont_extend_height=True,
+            ),
+
+        ])
+
+        self.right_part = HSplit([
+            self.progress_controls_part,
+            Window(height=1, char="-", style="class:line"),
+            self.player_controls_part,
+        ])
+
         self.left_part = Box(self.playlist_part, height=10, width=30)
 
         parts = []
@@ -100,7 +132,7 @@ class PlayListPlayer(Progress):
 
     def get_right_part(self):
         return self.right_part
-        
+
 
 class PlayerModel(ProgressModel):
 

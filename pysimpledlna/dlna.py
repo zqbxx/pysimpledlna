@@ -47,7 +47,7 @@ class SimpleDLNAServer():
         self.is_server_started = False
 
     def start_server(self):
-        reactor.listenTCP(self.server_port, Site(self.root))
+        reactor.listenTCP(self.server_port, Site(self.root), interface="0.0.0.0")
         threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}).start()
         self.is_server_started = True
 
@@ -331,7 +331,7 @@ class Device():
             print(e)
 
     def unmute(self):
-        self.dlna_server.mute()
+        self.mute()
 
     def transport_info(self):
 
