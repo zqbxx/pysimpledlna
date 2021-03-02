@@ -26,7 +26,7 @@ class ActionController:
         self.end = False
 
     def start_play(self):
-        self.play_next()
+        self.play()
 
     def stop_device(self):
         self.device.stop_sync_remote_player_status()
@@ -54,7 +54,7 @@ class ActionController:
                 self.player.player_status = PlayerStatus.PAUSE
 
             if old_value in ['PLAYING', 'PAUSED_PLAYBACK'] and new_value == 'STOPPED':
-                if self.current_video_position >= self.current_video_duration - 2 * self.device.sync_remote_player_interval:
+                if self.current_video_position >= self.get_max_video_position():
                     # 只对播放文件末尾时间进行处理
                     wait_interval(self.current_video_duration, 0, self.current_video_position)
 
@@ -65,6 +65,7 @@ class ActionController:
                     else:
                         self.stop_device()
                         os.kill(signal.CTRL_C_EVENT, 0)
+
                 else:
                     self.stop_device()
                     os.kill(signal.CTRL_C_EVENT, 0)
@@ -78,7 +79,29 @@ class ActionController:
         elif type == 'UpdatePositionEnd':
             self.player.draw()
 
+    def get_max_video_position(self):
+        return self.current_video_duration - 2 * self.device.sync_remote_player_interval
+
     def play_next(self):
+        self.current_idx += 1
+        self.play()
+
+    def play_last(self):
+        self.current_idx -= 1
+        self.play()
+
+    def play(self):
+
+        if self.current_idx >= len(self.file_list):
+            self.current_idx = len(self.file_list) - 1
+            return
+
+        if self.current_idx < 0:
+            self.current_idx = 0
+            return
+
+        self.player.new_player()
+
         file_path = self.file_list[self.current_idx]
         self.player.video_file = file_path
         self.player.duration = 0
@@ -93,7 +116,6 @@ class ActionController:
             self.device.play()
             self.ensure_player_is_playing()
             self.player.player_status = PlayerStatus.PLAY
-            self.current_idx += 1
         finally:
             self._restore_hooks(exceptionhook, positionhook, transportstatehook)
 
