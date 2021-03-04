@@ -148,3 +148,28 @@ class ActionController:
         self.device.transportstatehook = transportstatehook
         self.device.positionhook = positionhook
         self.device.exceptionhook = exceptionhook
+
+
+class EventActionController(ActionController):
+
+    def __init__(self, file_list, device: Device, player=Player()):
+        super().__init__(file_list, device, player)
+        from prompt_toolkit_ext.event import Event
+        self.events = {
+            'play_next': Event(),
+            'play_last': Event(),
+            'play': Event()
+        }
+
+    def play_next(self):
+        super().play_next()
+        self.events['play_next'].fire(self.current_idx)
+
+    def play_last(self):
+        super().play_last()
+        self.events['play_last'].fire(self.current_idx)
+
+    def play(self):
+        super().play()
+        self.events['play'].fire(self.current_idx)
+

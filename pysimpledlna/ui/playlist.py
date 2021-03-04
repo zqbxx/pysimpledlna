@@ -12,6 +12,7 @@ from prompt_toolkit.styles import BaseStyle
 
 from prompt_toolkit_ext.progress import ProgressModel, Progress
 from prompt_toolkit_ext.widgets import RadioList
+from prompt_toolkit_ext.event import KeyEvent
 from prompt_toolkit.layout.dimension import AnyDimension, D
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 from pysimpledlna.ui.terminal import PlayerStatus
@@ -37,6 +38,7 @@ class PlayListPlayer(Progress):
                  color_depth: Optional[ColorDepth] = None, output: Optional[Output] = None,
                  input: Optional[Input] = None,
                  ) -> None:
+
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.left_part = None
         self.right_part = None
@@ -46,6 +48,20 @@ class PlayListPlayer(Progress):
         self.player_controls_cp = None
         self.playlist_part: RadioList = playlist_part
         self.top_text: Tuple[str] = top_text
+
+        self.player_events = {
+            'quit': KeyEvent('q'),
+            'focus_playlist': KeyEvent('n'),
+            'focus_controller': KeyEvent('m'),
+        }
+
+        self.controller_events = {
+            'forward': KeyEvent('right'),
+            'backward': KeyEvent('left'),
+            'next': KeyEvent('pagedown'),
+            'last': KeyEvent('pageup'),
+            'pause': KeyEvent('p'),
+        }
 
     def create_model(
         self,
@@ -100,32 +116,50 @@ class PlayListPlayer(Progress):
 
     def create_key_bindings(self):
 
-        kb = KeyBindings()
+        player_kb = KeyBindings()
 
-        @kb.add("a")
+        @player_kb.add(self.player_events['quit'].key)
         def _(event):
-            event.app.layout.focus(self.get_left_part())
-
-        @kb.add("b")
-        def _(event):
-            event.app.layout.focus(self.get_right_part())
-
-        @kb.add('p')
-        def _(event):
-            player_model: PlayerModel = self.models[0]
-            if player_model.cur_status == PlayerStatus.PAUSE:
-                player_model.cur_status = PlayerStatus.PLAY
-            elif player_model.cur_status == PlayerStatus.PLAY:
-                player_model.cur_status = PlayerStatus.PAUSE
-
-        @kb.add("q")
-        def _(event):
-            player_model: PlayerModel = self.models[0]
-            player_model.cur_status = PlayerStatus.STOP
-            " Quit application. "
             self.exit()
+            for model in self.models:
+                model.player_status = PlayerStatus.STOP
+            self.player_events['quit'].fire(event)
 
-        self.key_bindings = kb
+        @player_kb.add(self.player_events['focus_playlist'].key)
+        def _(event):
+            self.app.layout.focus(self.left_part)
+            self.player_events['focus_playlist'].fire(event)
+
+        @player_kb.add(self.player_events['focus_controller'].key)
+        def _(event):
+            self.app.layout.focus(self.player_controls_cp)
+            self.player_events['focus_controller'].fire(event)
+
+        self.key_bindings = player_kb
+
+        player_controller_kb = KeyBindings()
+
+        @player_controller_kb.add(self.controller_events['forward'].key)
+        def _(event):
+            self.controller_events['forward'].fire(event)
+
+        @player_controller_kb.add(self.controller_events['backward'].key)
+        def _(event):
+            self.controller_events['backward'].fire(event)
+
+        @player_controller_kb.add(self.controller_events['next'].key)
+        def _(event):
+            self.controller_events['next'].fire(event)
+
+        @player_controller_kb.add(self.controller_events['last'].key)
+        def _(event):
+            self.controller_events['last'].fire(event)
+
+        @player_controller_kb.add(self.controller_events['pause'].key)
+        def _(event):
+            self.controller_events['pause'].fire(event)
+
+        self.player_controls_keybindings = player_controller_kb
 
     def get_left_part(self):
         return self.left_part

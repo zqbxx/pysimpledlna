@@ -2,11 +2,9 @@ import argparse
 import time
 import signal
 import logging
-import os
 import re
 import fnmatch
 import os
-print(os.getenv('PYTHONPATH'))
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
@@ -228,6 +226,7 @@ def playlist_play(args):
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
         VideoPositionFormatter, VideoControlFormatter, VideoFileFormatter)
+    from pysimpledlna.ac import EventActionController
     from pysimpledlna.utils import format_time
     from prompt_toolkit_ext.widgets import RadioList
     from prompt_toolkit.shortcuts.progress_bar.formatters import Text
@@ -257,7 +256,7 @@ def playlist_play(args):
 
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
-        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
+        logging.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
     play_list = Playlist(play_list_file)
@@ -274,11 +273,10 @@ def playlist_play(args):
         Text(" "),
         VideoFileFormatter()
     ]
-    title_toolbar = HTML('<b>[n]</b>播放列表<b>[m]</b>进度条')
-    bottom_toolbar = HTML('<b>[q]</b>退出<b>[p]</b>暂停')
-    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar, title=title_toolbar)
+    bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条')
+    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar)
     player_model: PlayerModel = player.create_model()
-    ac = ActionController(file_list, device, player_model)
+    ac = EventActionController(file_list, device, player_model)
 
     def on(type, old_value, new_value):
         if type == 'selected':
@@ -300,66 +298,35 @@ def playlist_play(args):
 
     playlist_contents.add_enter_handle(on)
 
-    player_kb = KeyBindings()
+    player.create_key_bindings()
+    player.create_ui()
 
-    @player_kb.add("q")
-    def player_quit(event):
-        " Quit application. "
-        #event.app.exit()
-        player.exit()
-        player_model.player_status = PlayerStatus.STOP
-        ac.stop_device()
+    def _update_list_ui(current_index):
+        playlist_contents.current_value = playlist_contents.values[current_index][0]
 
-    @player_kb.add("n")
-    def _(event):
-        event.app.layout.focus(player.left_part)
-
-    @player_kb.add("m")
-    def _(event):
-        event.app.layout.focus(player.player_controls_cp)
-
-    player.key_bindings = player_kb
-
-    player_controls_kb = KeyBindings()
-
-    @player_controls_kb.add('p')
-    def _(event):
-        if player_model.player_status == PlayerStatus.PAUSE:
-            ac.device.play()
-        elif player_model.player_status == PlayerStatus.PLAY:
-            ac.device.pause()
-
-    @player_controls_kb.add('left')
-    def _(event):
-        target_position = ac.current_video_position - 10
-        if target_position < 0:
-            target_position = 0
-        time_str = format_time(target_position)
-        ac.device.seek(time_str)
-
-    @player_controls_kb.add('right')
-    def _(event):
+    def _forward(event):
         target_position = ac.current_video_position + 10
         if target_position >= ac.get_max_video_position():
             return
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
-    @player_controls_kb.add('pageup')
-    def _(event):
-        if ac.current_idx == 0:
+    def _backward(event):
+        target_position = ac.current_video_position + 10
+        if target_position >= ac.get_max_video_position():
             return
-        ac.play_last()
+        time_str = format_time(target_position)
+        ac.device.seek(time_str)
 
-    @player_controls_kb.add('pagedown')
-    def _(event):
-        if ac.current_idx >= len(ac.file_list):
-            return
-        ac.play_next()
+    player.player_events['quit'] += lambda e: ac.stop_device()
+    player.controller_events['pause'] += \
+        lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
+    player.controller_events['last'] += lambda e: ac.play_last()
+    player.controller_events['next'] += lambda e: ac.play_next()
+    player.controller_events['forward'] += _forward
+    player.controller_events['backward'] += _backward
 
-    player.player_controls_keybindings = player_controls_kb
-
-    player.create_ui()
+    ac.events['play'] += _update_list_ui
 
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
     device.start_sync_remote_player_status()
@@ -372,11 +339,6 @@ def playlist_play(args):
             if ac.end:
                 break
             time.sleep(0.5)
-            index = ac.current_idx
-            if not (index == playlist_contents.get_selected_index()):
-                #pass
-                #playlist_contents.set_selected_index(index)
-                playlist_contents.current_value = playlist_contents.values[index][0]
 
     finally:
         device.stop_sync_remote_player_status()
