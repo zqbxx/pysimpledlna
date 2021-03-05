@@ -1,12 +1,16 @@
+import threading
+import time
+from queue import Queue, Empty
+
 from prompt_toolkit.input import Input
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.output import ColorDepth, Output
 from prompt_toolkit.formatted_text import (
     HTML,
     AnyFormattedText,
-    to_formatted_text,
+    to_formatted_text
 )
-from typing import TextIO
+from typing import TextIO, List
 
 from prompt_toolkit.styles import BaseStyle
 
@@ -22,8 +26,9 @@ import os
 
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.widgets import Box, Label, Button
+from prompt_toolkit.widgets import Box, Label
 from typing import Optional, Sequence, Tuple
+import logging
 
 
 class PlayListPlayer(Progress):
@@ -63,6 +68,22 @@ class PlayListPlayer(Progress):
             'pause': KeyEvent('p'),
         }
 
+        self.pressed_key = ''
+        self.pressed_key_cnt = 0
+        self.min_key_press_interval = 0.05
+        self.last_key_press_time = time.time()
+
+        self.event_queue = Queue()
+        self.event_thread = None
+
+    def is_accept_key_press(self):
+        return (time.time() - self.last_key_press_time) > self.min_key_press_interval
+
+    def _get_pressed_key_str(self):
+        if self.pressed_key_cnt == 0:
+            return 'Status: '
+        return f'Status: [{self.pressed_key}] [+{str(self.pressed_key_cnt)}]'
+
     def create_model(
         self,
         remove_when_done: bool = False,
@@ -80,19 +101,21 @@ class PlayListPlayer(Progress):
                 focusable=True,
             )
 
-        self.player_controls_part = VSplit([
-            Label(text="[PgUp] 上一个"),
-            Label(text="[<] 后退"),
-            Label(text="[p] 暂停/播放"),
-            Label(text="[>] 前进"),
-            Label(text="[PgDn] 下一个"),
-            Window(
-                self.player_controls_cp,
-                height=1,
-                dont_extend_width=True,
-                dont_extend_height=True,
-            ),
-
+        self.player_controls_part = HSplit([
+            VSplit([
+                Label(text="[PgUp] 上一个"),
+                Label(text="[<-] 后退"),
+                Label(text="[p] 暂停/播放"),
+                Label(text="[->] 前进"),
+                Label(text="[PgDn] 下一个"),
+                Window(
+                    self.player_controls_cp,
+                    height=1,
+                    dont_extend_width=True,
+                    dont_extend_height=True,
+                ),
+            ]),
+            Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
         ])
 
         self.right_part = HSplit([
@@ -113,6 +136,11 @@ class PlayListPlayer(Progress):
 
         body = HSplit(parts)
         return body
+
+    def create_ui(self):
+        super().create_ui()
+        self.event_thread = threading.Thread(target=self.execute_key, daemon=True)
+        self.event_thread.start()
 
     def create_key_bindings(self):
 
@@ -141,11 +169,19 @@ class PlayListPlayer(Progress):
 
         @player_controller_kb.add(self.controller_events['forward'].key)
         def _(event):
-            self.controller_events['forward'].fire(event)
+            if not self.is_accept_key_press():
+                return
+            self.last_key_press_time = time.time()
+            key = self.controller_events['forward'].key
+            self.event_queue.put([key, event])
 
         @player_controller_kb.add(self.controller_events['backward'].key)
         def _(event):
-            self.controller_events['backward'].fire(event)
+            if not self.is_accept_key_press():
+                return
+            self.last_key_press_time = time.time()
+            key = self.controller_events['backward'].key
+            self.event_queue.put([key, event])
 
         @player_controller_kb.add(self.controller_events['next'].key)
         def _(event):
@@ -160,6 +196,83 @@ class PlayListPlayer(Progress):
             self.controller_events['pause'].fire(event)
 
         self.player_controls_keybindings = player_controller_kb
+
+    def execute_key(self):
+
+        seek_queue = []
+
+        seek_key_map = {
+            "left": 'backward',
+            'right': 'forward',
+        }
+
+        def get_next_event():
+            try:
+                next_val = self.event_queue.get(block=False, timeout=0)
+                return next_val[0], next_val[1]
+            except Empty:
+                return None, None
+
+        def add_key_to_local_queue(local_queue: List, key, name, event):
+            if len(local_queue) > 0:
+                last_key = local_queue[-1][0]
+                # 不相同的key，抵消一个
+                if last_key != key:
+                    local_queue.pop()
+                    logging.debug(f'key changed: {key}, old, {last_key}, queue len {len(local_queue)}')
+                    self.pressed_key_cnt = len(local_queue) * 10
+                    return
+            local_queue.append([key, event])
+            logging.debug(f'queue append: {key}, queue len {len(local_queue)}')
+            self.pressed_key = name.capitalize()
+            self.pressed_key_cnt = len(local_queue) * 10
+
+        def clear_local_queue(local_queue: List):
+            local_queue.clear()
+            logging.debug(f'queue cleared')
+            self.pressed_key = ''
+            self.pressed_key_cnt = 0
+
+        while True:
+            start = time.time()
+            key, event = get_next_event()
+
+            local_queue_has_data = len(seek_queue) > 0
+            is_empty_key = key is None and event is None
+
+            # 按键中断或者按键改变
+            if is_empty_key and local_queue_has_data:
+
+                _key, _event = seek_queue[-1]
+                _event_name = seek_key_map[_key]
+
+                cnt = len(seek_queue)
+
+                if cnt > 0:
+
+                    try:
+                        self.controller_events[_event_name].fire(_event, len(seek_queue))
+                    finally:
+                        clear_local_queue(seek_queue)
+
+            elif not is_empty_key:
+                add_key_to_local_queue(seek_queue, key, seek_key_map[key], event)
+
+            if not self.app.is_running:
+                break
+
+            # 处理连续按键，不等待
+            if self.event_queue.qsize() > 0:
+                continue
+
+            end = time.time()
+            dur = end - start
+            left_time = 0.8 - dur
+            # 在一段时间内查看是否有新按键，有则进行处理，没有则等待直到时间耗尽
+            for i in range(int(left_time*20)):
+                time.sleep(0.05)
+                if self.event_queue.qsize() > 0:
+                    break
 
     def get_left_part(self):
         return self.left_part
@@ -324,3 +437,4 @@ class VideoFileFormatter(VideoBaseFormatter):
 
     def get_render_text(self, player: "PlayerModel"):
         return player.video_file
+

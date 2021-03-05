@@ -19,6 +19,7 @@ _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
 def main():
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
+    #logging.basicConfig(filename='log.txt',level=logging.DEBUG)
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -304,17 +305,17 @@ def playlist_play(args):
     def _update_list_ui(current_index):
         playlist_contents.current_value = playlist_contents.values[current_index][0]
 
-    def _forward(event):
-        target_position = ac.current_video_position + 10
+    def _forward(event, times):
+        target_position = ac.current_video_position + 10 * times
         if target_position >= ac.get_max_video_position():
-            return
+            target_position = ac.get_max_video_position() - 10
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
-    def _backward(event):
-        target_position = ac.current_video_position + 10
-        if target_position >= ac.get_max_video_position():
-            return
+    def _backward(event, times):
+        target_position = ac.current_video_position - 10 * times
+        if target_position <= 0:
+            target_position = 1
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
