@@ -6,7 +6,7 @@ import time
 from pysimpledlna import Device
 from pysimpledlna.ui.terminal import Player, PlayerStatus
 from pysimpledlna.utils import wait_interval
-
+from prompt_toolkit_ext.event import Event
 
 class ActionController:
 
@@ -25,8 +25,12 @@ class ActionController:
 
         self.end = False
 
-    def start_play(self):
-        self.play()
+        self.events = {
+            'play_next': Event(),
+            'play_last': Event(),
+            'play': Event(),
+            'video_position': Event(),
+        }
 
     def stop_device(self):
         self.device.stop_sync_remote_player_status()
@@ -74,6 +78,8 @@ class ActionController:
             self.current_video_duration = new_value
             self.player.duration = new_value
         elif type == 'RelTimeInSeconds':
+            if self.current_video_position != new_value:
+                self.events['video_position'].fire(self.current_video_position, new_value)
             self.current_video_position = new_value
             self.player.cur_pos = new_value
         elif type == 'UpdatePositionEnd':
@@ -85,10 +91,12 @@ class ActionController:
     def play_next(self):
         self.current_idx += 1
         self.play()
+        self.events['play_next'].fire(self.current_idx)
 
     def play_last(self):
         self.current_idx -= 1
         self.play()
+        self.events['play_last'].fire(self.current_idx)
 
     def play(self):
 
@@ -118,6 +126,7 @@ class ActionController:
             self.player.player_status = PlayerStatus.PLAY
         finally:
             self._restore_hooks(exceptionhook, positionhook, transportstatehook)
+            self.events['play'].fire(self.current_idx)
 
     def ensure_player_is_playing(self):
 
@@ -126,10 +135,16 @@ class ActionController:
         try:
             for i in range(60):
                 start = time.time()
+                position_info = self.device.position_info()
+                rt_in_sec = position_info['RelTimeInSeconds']
+                if rt_in_sec >= 1:
+                    return
+                '''
                 transport_info = self.device.transport_info()
                 player_status = transport_info['CurrentTransportState']
                 if player_status == 'PLAYING':
                     return
+                '''
                 dur = time.time() - start
                 time.sleep((1 - dur))
         finally:
@@ -148,28 +163,3 @@ class ActionController:
         self.device.transportstatehook = transportstatehook
         self.device.positionhook = positionhook
         self.device.exceptionhook = exceptionhook
-
-
-class EventActionController(ActionController):
-
-    def __init__(self, file_list, device: Device, player=Player()):
-        super().__init__(file_list, device, player)
-        from prompt_toolkit_ext.event import Event
-        self.events = {
-            'play_next': Event(),
-            'play_last': Event(),
-            'play': Event()
-        }
-
-    def play_next(self):
-        super().play_next()
-        self.events['play_next'].fire(self.current_idx)
-
-    def play_last(self):
-        super().play_last()
-        self.events['play_last'].fire(self.current_idx)
-
-    def play(self):
-        super().play()
-        self.events['play'].fire(self.current_idx)
-

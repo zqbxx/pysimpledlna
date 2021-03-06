@@ -107,7 +107,7 @@ class Playlist:
         if jo.get('current_index') is not None:
             self._current_index = int(jo.get('current_index'))
         if jo.get('current_pos') is not None:
-            self._current_index = int(jo.get('current_pos'))
+            self._current_pos = int(jo.get('current_pos'))
         if jo.get('file_list') is not None:
             self._file_list = jo.get('file_list')
 

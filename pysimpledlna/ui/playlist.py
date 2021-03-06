@@ -37,10 +37,12 @@ class PlayListPlayer(Progress):
                  playlist_part: RadioList,
                  top_text: Tuple[str] = None,
                  title: AnyFormattedText = None,
-                 formatters: Optional[Sequence[Formatter]] = [Text(' ')],
-                 bottom_toolbar: AnyFormattedText = None, style: Optional[BaseStyle] = None,
+                 formatters: Optional[Sequence[Formatter]] = None,
+                 bottom_toolbar: AnyFormattedText = None,
+                 style: Optional[BaseStyle] = None,
                  file: Optional[TextIO] = None,
-                 color_depth: Optional[ColorDepth] = None, output: Optional[Output] = None,
+                 color_depth: Optional[ColorDepth] = None,
+                 output: Optional[Output] = None,
                  input: Optional[Input] = None,
                  ) -> None:
 

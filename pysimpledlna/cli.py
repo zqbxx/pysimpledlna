@@ -227,12 +227,10 @@ def playlist_play(args):
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
         VideoPositionFormatter, VideoControlFormatter, VideoFileFormatter)
-    from pysimpledlna.ac import EventActionController
     from pysimpledlna.utils import format_time
     from prompt_toolkit_ext.widgets import RadioList
     from prompt_toolkit.shortcuts.progress_bar.formatters import Text
     from pysimpledlna.ui.terminal import PlayerStatus
-    from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.patch_stdout import patch_stdout
     from prompt_toolkit import HTML
 
@@ -277,7 +275,7 @@ def playlist_play(args):
     bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条')
     player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar)
     player_model: PlayerModel = player.create_model()
-    ac = EventActionController(file_list, device, player_model)
+    ac = ActionController(file_list, device, player_model)
 
     def on(type, old_value, new_value):
         if type == 'selected':
@@ -307,6 +305,10 @@ def playlist_play(args):
 
     def _forward(event, times):
         target_position = ac.current_video_position + 10 * times
+        if ac.current_video_duration == 0:
+            time_str = format_time(target_position)
+            ac.device.seek(time_str)
+            return
         if target_position >= ac.get_max_video_position():
             target_position = ac.get_max_video_position() - 10
         time_str = format_time(target_position)
@@ -319,6 +321,15 @@ def playlist_play(args):
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
+    def _update_playlist_index(current_index):
+        play_list.current_index = current_index
+        play_list._current_pos = 0
+        play_list.save_playlist(force=True)
+
+    def _update_playlist_video_position(o_position, n_position):
+        play_list.current_pos = n_position
+        play_list.save_playlist()
+
     player.player_events['quit'] += lambda e: ac.stop_device()
     player.controller_events['pause'] += \
         lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
@@ -328,16 +339,30 @@ def playlist_play(args):
     player.controller_events['backward'] += _backward
 
     ac.events['play'] += _update_list_ui
+    ac.events['play'] += _update_playlist_index
+    ac.events['video_position'] += _update_playlist_video_position
 
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
     device.start_sync_remote_player_status()
 
+    playlist_contents.set_selected_index(play_list.current_index)
+    ac.current_idx = play_list.current_index
+    position_in_playlist = play_list.current_pos
+
     with patch_stdout():
-        ac.start_play()
+        ac.play()
+        if position_in_playlist > 0:
+            time_str = format_time(position_in_playlist)
+            ac.device.seek(time_str)
+            play_list.current_pos = position_in_playlist
+            play_list.save_playlist(force=True)
 
     try:
         while True:
             if ac.end:
+                play_list.current_pos = ac.current_video_position
+                play_list.current_index = ac.current_idx
+                play_list.save_playlist(force=True)
                 break
             time.sleep(0.5)
 
