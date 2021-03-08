@@ -102,8 +102,10 @@ class Playlist:
         if not os.path.isfile(self.file_path):
             return
         jo = None
-        with open(self.file_path, 'r', encoding="utf-8") as f:
-            jo = json.load(f)
+        import codecs
+        with open(self.file_path, 'r', encoding="utf-8-sig") as f:
+            #line = f.readlines()
+            jo = json.loads(f.read())
         if jo.get('current_index') is not None:
             self._current_index = int(jo.get('current_index'))
         if jo.get('current_pos') is not None:
