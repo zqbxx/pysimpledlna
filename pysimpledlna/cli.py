@@ -19,7 +19,7 @@ _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
 def main():
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
-    #logging.basicConfig(filename='log.txt',level=logging.DEBUG)
+    #logging.basicConfig(filename='log.txt', format='%(asctime)s %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -169,7 +169,7 @@ def play(args):
     ac = ActionController(file_list, device)
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
     device.start_sync_remote_player_status()
-    ac.start_play()
+    ac.play()
     signal.signal(signal.SIGINT, signal_handler)
     try:
         while True:
@@ -352,6 +352,8 @@ def playlist_play(args):
     with patch_stdout():
         ac.play()
         if position_in_playlist > 0:
+            # 乐播投屏会播放广告，等广告播放完毕后再设置进度
+            ac.ensure_player_is_playing()
             time_str = format_time(position_in_playlist)
             ac.device.seek(time_str)
             play_list.current_pos = position_in_playlist
