@@ -266,19 +266,19 @@ class Device():
 
     def pause_sync_remote_player_status(self):
         if self.sync_thread:
-            self.sync_thread.send_pause_event()
+            self.sync_thread.pause()
             return True
         return False
 
     def resume_sync_remote_player_status(self):
         if self.sync_thread:
-            self.sync_thread.send_resume_event()
+            self.sync_thread.resume()
             return True
         return False
 
     def stop_sync_remote_player_status(self):
         if self.sync_thread:
-            self.sync_thread.send_stop_event(self.__after_sync_thread_stopped)
+            self.sync_thread.stop(self.__after_sync_thread_stopped)
             return True
         return False
 
@@ -399,65 +399,52 @@ class StatusException(Exception):
         Exception.__init__(self, self.err_msg, self.err_msg_detail)
 
 
-class EasyThread(Thread):
+class EasyThread(threading.Thread):
 
-    def __init__(self):
-        Thread.__init__(self)
-        self.stopEvent = Event()
-        self.pauseEvent = Event()
+    def __init__(self, *args, **kwargs):
+        super(EasyThread, self).__init__(*args, **kwargs)
+
+        self.__flag = threading.Event() # The flag used to pause the thread
+        self.__flag.set() # Set to True
+        self.__running = threading.Event() # Used to stop the thread identification
+        self.__running.set() # Set running to True
         self.__current_status = ThreadStatus.STOPPED
+
         self.stophook = None
 
+
     def run(self):
-
-        self.__current_status = ThreadStatus.RUNNING
         try:
-            while True:
-
-                if self.pauseEvent.is_set():
-                    self.__wait_for_notify()
-
-                if self.stopEvent.is_set():
-                    self.__stop_thread()
-                    break
-
+            while self.__running.isSet():
+                logging.debug('thread waiting...')
+                self.__flag.wait() # return immediately when it is True, block until the internal flag is True when it is False
+                logging.debug('thread running...')
+                self.__current_status = ThreadStatus.RUNNING
                 self.do_it()
-
-            if self.stophook is not None:
-                self.stophook()
+            logging.debug('thread end')
         finally:
+            if self.stophook is not None:
+                logging.debug('call thread stop callback')
+                self.stophook()
             self.__current_status = ThreadStatus.STOPPED
+
+    def pause(self):
+        logging.debug('set thread to pause')
+        self.__current_status = ThreadStatus.PAUSED
+        self.__flag.clear() # Set to False to block the thread
+
+    def resume(self):
+        logging.debug('set thread to resume')
+        self.__flag.set() # Set to True, let the thread stop blocking
+
+    def stop(self, stophook=None):
+        logging.debug('set thread to stop')
+        self.stophook = stophook
+        self.__flag.set() # Resume the thread from the suspended state, if it is already suspended
+        self.__running.clear() # Set to False
 
     def do_it(self):
         pass
-
-    def __wait_for_notify(self):
-        self.__current_status = ThreadStatus.PAUSED
-        self.pauseEvent.clear()
-        self.pauseEvent.wait()
-        self.pauseEvent.clear()
-        self.__current_status = ThreadStatus.RUNNING
-
-    def __stop_thread(self):
-        self.stopEvent.clear()
-        self.__current_status = ThreadStatus.STOPPED
-
-    def send_pause_event(self):
-        if self.__current_status == ThreadStatus.RUNNING:
-            self.pauseEvent.set()
-        else:
-            raise StatusException('当前线程处于' + self.__current_status.name + '状态，无法暂停')
-
-    def send_resume_event(self):
-        if self.__current_status == ThreadStatus.PAUSED:
-            self.pauseEvent.set()
-        else:
-            raise StatusException('当前线程处于' + self.__current_status.name + '状态，无法恢复')
-
-    def send_stop_event(self, stophook=None):
-        if self.__current_status != ThreadStatus.STOPPED:
-            self.stophook = stophook
-            self.stopEvent.set()
 
 
 class DlnaDeviceSyncThread(EasyThread):
