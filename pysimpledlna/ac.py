@@ -8,6 +8,7 @@ from pysimpledlna.ui.terminal import Player, PlayerStatus
 from pysimpledlna.utils import wait_interval
 from prompt_toolkit_ext.event import Event
 
+
 class ActionController:
 
     '''
@@ -116,50 +117,24 @@ class ActionController:
         self.player.cur_pos = 0
         server_file_path = self.device.add_file(file_path)
 
-        positionhook, transportstatehook, exceptionhook = self._remove_hooks()
-
         try:
             self.device.stop()
             self.device.set_AV_transport_URI(server_file_path)
             self.device.play()
-            self.ensure_player_is_playing()
             self.player.player_status = PlayerStatus.PLAY
+            # 强制下一次轮询时强制更新
+            if self.device.sync_thread is not None:
+                self.device.sync_thread.last_status = None
         finally:
-            self._restore_hooks(exceptionhook, positionhook, transportstatehook)
             self.events['play'].fire(self.current_idx)
 
     def ensure_player_is_playing(self):
-
-        positionhook, transportstatehook, exceptionhook = self._remove_hooks()
-
-        try:
-            for i in range(60):
-                start = time.time()
-                position_info = self.device.position_info()
-                rt_in_sec = position_info['RelTimeInSeconds']
-                if rt_in_sec >= 1:
-                    return
-                '''
-                transport_info = self.device.transport_info()
-                player_status = transport_info['CurrentTransportState']
-                if player_status == 'PLAYING':
-                    return
-                '''
-                dur = time.time() - start
-                time.sleep((1 - dur))
-        finally:
-            self._restore_hooks(exceptionhook, positionhook, transportstatehook)
-
-    def _remove_hooks(self):
-        transportstatehook = self.device.transportstatehook
-        positionhook = self.device.positionhook
-        exceptionhook = self.device.exceptionhook
-        self.device.transportstatehook = None
-        self.device.positionhook = None
-        self.device.exceptionhook = None
-        return positionhook, transportstatehook, exceptionhook
-
-    def _restore_hooks(self, exceptionhook, positionhook, transportstatehook):
-        self.device.transportstatehook = transportstatehook
-        self.device.positionhook = positionhook
-        self.device.exceptionhook = exceptionhook
+        for i in range(60):
+            start = time.time()
+            position_info = self.device.position_info()
+            rt_in_sec = position_info['RelTimeInSeconds']
+            if rt_in_sec >= 1:
+                return
+            logging.debug(f'waiting for ad: {str(i)}')
+            dur = time.time() - start
+            time.sleep((1 - dur))
