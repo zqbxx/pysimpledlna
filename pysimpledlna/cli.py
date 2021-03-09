@@ -321,6 +321,18 @@ def playlist_play(args):
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
+    def _next(event, times):
+        ac.current_idx += times
+        if ac.current_idx >= len(playlist_contents.values):
+            ac.current_idx = len(playlist_contents.values) - 1
+        ac.play()
+
+    def _last(event, times):
+        ac.current_idx -= times
+        if ac.current_idx < 0:
+            ac.current_idx = 0
+        ac.play()
+
     def _update_playlist_index(current_index):
         play_list.current_index = current_index
         play_list._current_pos = 0
@@ -333,8 +345,8 @@ def playlist_play(args):
     player.player_events['quit'] += lambda e: ac.stop_device()
     player.controller_events['pause'] += \
         lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
-    player.controller_events['last'] += lambda e: ac.play_last()
-    player.controller_events['next'] += lambda e: ac.play_next()
+    player.controller_events['last'] += _last
+    player.controller_events['next'] += _next
     player.controller_events['forward'] += _forward
     player.controller_events['backward'] += _backward
 
@@ -353,6 +365,7 @@ def playlist_play(args):
         ac.play()
         if position_in_playlist > 0:
             # 乐播投屏会播放广告，等广告播放完毕后再设置进度
+            # 对于速度较慢的设备，或者处于屏保中的设备，也需要等待
             ac.ensure_player_is_playing()
             time_str = format_time(position_in_playlist)
             ac.device.seek(time_str)

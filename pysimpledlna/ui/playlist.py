@@ -187,11 +187,19 @@ class PlayListPlayer(Progress):
 
         @player_controller_kb.add(self.controller_events['next'].key)
         def _(event):
-            self.controller_events['next'].fire(event)
+            if not self.is_accept_key_press():
+                return
+            self.last_key_press_time = time.time()
+            key = self.controller_events['next'].key
+            self.event_queue.put([key, event])
 
         @player_controller_kb.add(self.controller_events['last'].key)
         def _(event):
-            self.controller_events['last'].fire(event)
+            if not self.is_accept_key_press():
+                return
+            self.last_key_press_time = time.time()
+            key = self.controller_events['last'].key
+            self.event_queue.put([key, event])
 
         @player_controller_kb.add(self.controller_events['pause'].key)
         def _(event):
@@ -202,10 +210,16 @@ class PlayListPlayer(Progress):
     def execute_key(self):
 
         seek_queue = []
+        switch_queue = []
 
         seek_key_map = {
             "left": 'backward',
             'right': 'forward',
+        }
+
+        switch_key_map = {
+            'pagedown': 'next',
+            'pageup': 'last',
         }
 
         def get_next_event():
@@ -216,18 +230,25 @@ class PlayListPlayer(Progress):
                 return None, None
 
         def add_key_to_local_queue(local_queue: List, key, name, event):
+
+            def set_key_cnt():
+                if key in switch_key_map:
+                    self.pressed_key_cnt = len(local_queue)
+                elif key in seek_key_map:
+                    self.pressed_key_cnt = len(local_queue) * 10
+
             if len(local_queue) > 0:
                 last_key = local_queue[-1][0]
                 # 不相同的key，抵消一个
                 if last_key != key:
                     local_queue.pop()
                     logging.debug(f'key changed: {key}, old, {last_key}, queue len {len(local_queue)}')
-                    self.pressed_key_cnt = len(local_queue) * 10
+                    set_key_cnt()
                     return
             local_queue.append([key, event])
             logging.debug(f'queue append: {key}, queue len {len(local_queue)}')
             self.pressed_key = name.capitalize()
-            self.pressed_key_cnt = len(local_queue) * 10
+            set_key_cnt()
 
         def clear_local_queue(local_queue: List):
             local_queue.clear()
@@ -235,30 +256,55 @@ class PlayListPlayer(Progress):
             self.pressed_key = ''
             self.pressed_key_cnt = 0
 
+        def execute_queue(local_queue: List):
+            if len(local_queue) == 0:
+                return
+
+            _key, _event = local_queue[-1]
+
+            if _key in seek_key_map:
+                _event_name = seek_key_map[_key]
+            elif _key in switch_key_map:
+                _event_name = switch_key_map[_key]
+            else:
+                return
+
+            cnt = len(local_queue)
+
+            if cnt > 0:
+
+                try:
+                    self.controller_events[_event_name].fire(_event, len(local_queue))
+                finally:
+                    clear_local_queue(local_queue)
+
         while True:
             start = time.time()
             key, event = get_next_event()
 
-            local_queue_has_data = len(seek_queue) > 0
+            seek_queue_has_data = len(seek_queue) > 0
+            switch_queue_has_data = len(switch_queue) > 0
             is_empty_key = key is None and event is None
+            if not is_empty_key:
+                is_seek_key = key in seek_key_map
+                is_switch_key = key in switch_key_map
 
-            # 按键中断或者按键改变
-            if is_empty_key and local_queue_has_data:
+            if is_empty_key:  # 按键中断
 
-                _key, _event = seek_queue[-1]
-                _event_name = seek_key_map[_key]
+                if seek_queue_has_data:
+                    execute_queue(seek_queue)
+                if switch_queue_has_data:
+                    execute_queue(switch_queue)
 
-                cnt = len(seek_queue)
+            elif is_seek_key:
 
-                if cnt > 0:
-
-                    try:
-                        self.controller_events[_event_name].fire(_event, len(seek_queue))
-                    finally:
-                        clear_local_queue(seek_queue)
-
-            elif not is_empty_key:
+                execute_queue(switch_queue)
                 add_key_to_local_queue(seek_queue, key, seek_key_map[key], event)
+
+            elif is_switch_key:
+                # 切换视频时忽略跳转时间
+                seek_queue.clear()
+                add_key_to_local_queue(switch_queue, key, switch_key_map[key], event)
 
             if not self.app.is_running:
                 break
