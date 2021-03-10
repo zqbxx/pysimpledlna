@@ -65,7 +65,6 @@ class ActionController:
 
                     if self.current_idx < len(self.file_list):
                         logging.debug('play next video')
-                        self.player.new_player()
                         self.play_next()
                     else:
                         self.stop_device()
@@ -122,6 +121,7 @@ class ActionController:
             self.device.set_AV_transport_URI(server_file_path)
             self.device.play()
             self.player.player_status = PlayerStatus.PLAY
+            self.ensure_player_is_playing()
             # 强制下一次轮询时强制更新
             if self.device.sync_thread is not None:
                 self.device.sync_thread.last_status = None
@@ -137,4 +137,6 @@ class ActionController:
                 return
             logging.debug(f'waiting for ad: {str(i)}')
             dur = time.time() - start
+            if dur >= 1:
+                continue
             time.sleep((1 - dur))

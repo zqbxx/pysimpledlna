@@ -97,6 +97,8 @@ class Playlist:
         self._file_list = []
         self.min_save_interval = min_save_interval
         self.last_save = 0
+        self._skip_head = 0
+        self._skip_tail = 0
 
     def load_playlist(self):
         if not os.path.isfile(self.file_path):
@@ -104,7 +106,6 @@ class Playlist:
         jo = None
         import codecs
         with open(self.file_path, 'r', encoding="utf-8-sig") as f:
-            #line = f.readlines()
             jo = json.loads(f.read())
         if jo.get('current_index') is not None:
             self._current_index = int(jo.get('current_index'))
@@ -112,6 +113,12 @@ class Playlist:
             self._current_pos = int(jo.get('current_pos'))
         if jo.get('file_list') is not None:
             self._file_list = jo.get('file_list')
+
+        if jo.get('skip_head') is not None:
+            self._skip_head = jo.get('skip_head')
+
+        if jo.get('skip_tail') is not None:
+            self._skip_tail = jo.get('skip_tail')
 
     def save_playlist(self, force=False):
         current = time.time()
@@ -121,6 +128,8 @@ class Playlist:
                 "current_index": self._current_index,
                 "current_pos": self._current_pos,
                 "file_list": self._file_list,
+                "skip_head": self._skip_head,
+                "skip_tail": self._skip_tail,
             }, ensure_ascii=False, indent=2)
             with open(self.file_path, 'w', encoding="utf-8") as fp:
                 fp.write(json_str)
@@ -149,3 +158,19 @@ class Playlist:
     @file_list.setter
     def file_list(self, file_list):
         self._file_list = file_list
+
+    @property
+    def skip_head(self):
+        return self._skip_head
+
+    @skip_head.setter
+    def skip_head(self, skip_head):
+        self._skip_head = skip_head
+
+    @property
+    def skip_tail(self):
+        return self._skip_tail
+
+    @skip_tail.setter
+    def skip_tail(self, skip_tail):
+        self._skip_tail = skip_tail

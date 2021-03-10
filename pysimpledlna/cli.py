@@ -8,8 +8,8 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    Playlist, get_playlist_dir, get_user_data_dir, get_free_tcp_port
-)
+    Playlist, get_playlist_dir, get_user_data_dir, get_free_tcp_port,
+    wait_interval)
 
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -95,6 +95,8 @@ def create_playlist_create_parser(subparsers):
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='playlist name')
     parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+', help='folders')
     parser.add_argument('-f', '--filter', dest='filter', required=False, type=str, help='filter')
+    parser.add_argument('-sh', '--skip-head', dest='skip_head', required=False, type=int, default=0, help='跳过片头时间')
+    parser.add_argument('-st', '--skip-tail', dest='skip_tail', required=False, type=int, default=0, help='跳过片尾时间')
     parser.set_defaults(func=playlist_create)
 
     return command, parser
@@ -190,6 +192,8 @@ def playlist_create(args):
     files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
              if pattern is not None and pattern.search(file_name) is not None]
     pl = Playlist(play_list_file)
+    pl.skip_head = args.skip_head
+    pl.skip_tail = args.skip_tail
     pl._file_list = files
     pl.save_playlist()
 
@@ -359,32 +363,49 @@ def playlist_play(args):
 
     playlist_contents.set_selected_index(play_list.current_index)
     ac.current_idx = play_list.current_index
-    position_in_playlist = play_list.current_pos
+    position_in_playlist = [play_list.current_pos]
+
+    def _skip_head(current_index):
+        if position_in_playlist[0] > 0:
+            if position_in_playlist[0] > ac.current_video_position:
+                time_str = format_time(position_in_playlist[0])
+                ac.device.seek(time_str)
+                play_list.current_pos = position_in_playlist[0]
+                play_list.save_playlist(force=True)
+                position_in_playlist[0] = -1
+        elif play_list.skip_head > 0:
+            time_str = format_time(play_list.skip_head)
+            ac.device.seek(time_str)
+            play_list.current_pos = play_list.skip_head
+            play_list.save_playlist(force=True)
+
+    ac.events['play'] += _skip_head
+
+    def _skip_tail(o_position, n_position):
+        if play_list.skip_tail == 0:
+            return
+        end = ac.get_max_video_position() - play_list.skip_tail
+        if n_position >= end:
+            ac.play_next()
+
+    ac.events['video_position'] += _skip_tail
 
     with patch_stdout():
         ac.play()
-        if position_in_playlist > 0:
-            # 乐播投屏会播放广告，等广告播放完毕后再设置进度
-            # 对于速度较慢的设备，或者处于屏保中的设备，也需要等待
-            ac.ensure_player_is_playing()
-            time_str = format_time(position_in_playlist)
-            ac.device.seek(time_str)
-            play_list.current_pos = position_in_playlist
-            play_list.save_playlist(force=True)
 
-    try:
-        while True:
-            if ac.end:
-                play_list.current_pos = ac.current_video_position
-                play_list.current_index = ac.current_idx
-                play_list.save_playlist(force=True)
-                break
-            time.sleep(0.5)
+        try:
+            while True:
+                if ac.end:
+                    play_list.current_pos = ac.current_video_position
+                    play_list.current_index = ac.current_idx
+                    play_list.save_playlist(force=True)
+                    break
+                time.sleep(0.5)
 
-    finally:
-        device.stop_sync_remote_player_status()
-        dlna_server.stop_server()
-        player.clear()
+        finally:
+            device.stop_sync_remote_player_status()
+            dlna_server.stop_server()
+            player.clear()
 
 
 def get_playlist_file_path(args):
