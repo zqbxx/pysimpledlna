@@ -18,8 +18,8 @@ _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
 
 def main():
 
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
-    #logging.basicConfig(filename='log.txt', format='%(asctime)s %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
+    #logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
+    logging.basicConfig(filename='log.txt', format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -361,11 +361,19 @@ def playlist_play(args):
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
     device.start_sync_remote_player_status()
 
-    playlist_contents.set_selected_index(play_list.current_index)
+    playlist_contents.set_checked_index(play_list.current_index)
     ac.current_idx = play_list.current_index
     position_in_playlist = [play_list.current_pos]
 
     def _skip_head(current_index):
+        
+        logging.debug('==start==')
+        logging.debug(f'cur index: {current_index}')
+        logging.debug(f'position_in_playlist: {position_in_playlist[0]}')
+        logging.debug(f'current_video_position: {ac.current_video_position}')
+        logging.debug(f'seek to {format_time(play_list.skip_head)}')
+        logging.debug('== end ==')
+
         if position_in_playlist[0] > 0:
             if position_in_playlist[0] > ac.current_video_position:
                 time_str = format_time(position_in_playlist[0])
@@ -374,6 +382,7 @@ def playlist_play(args):
                 play_list.save_playlist(force=True)
                 position_in_playlist[0] = -1
         elif play_list.skip_head > 0:
+            time.sleep(0.5)
             time_str = format_time(play_list.skip_head)
             ac.device.seek(time_str)
             play_list.current_pos = play_list.skip_head
@@ -385,7 +394,7 @@ def playlist_play(args):
         if play_list.skip_tail == 0:
             return
         end = ac.get_max_video_position() - play_list.skip_tail
-        if n_position >= end:
+        if n_position >= end and end > 0:
             ac.play_next()
 
     ac.events['video_position'] += _skip_tail
