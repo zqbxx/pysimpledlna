@@ -2,6 +2,20 @@ import argparse
 import time
 import signal
 import logging
+
+logging.basicConfig(  # filename=,
+    format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S',
+    level=logging.INFO,
+    handlers=[
+        # logging.StreamHandler(),
+        logging.FileHandler('log.txt'),
+    ], )
+
+logger = logging.getLogger('pysimpledlna.cli')
+logger.setLevel(logging.INFO)
+
+
 import re
 import fnmatch
 import os
@@ -19,7 +33,7 @@ _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
 def main():
 
     #logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
-    logging.basicConfig(filename='log.txt', format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
+
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -197,19 +211,19 @@ def playlist_create(args):
     pl._file_list = files
     pl.save_playlist()
 
-    logging.info('播放列表已保存:' + play_list_file)
+    logger.info('播放列表已保存:' + play_list_file)
 
 
 def playlist_delete(args):
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
-        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
+        logger.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
         return
     if os.path.isfile(play_list_file):
         os.remove(play_list_file)
-        logging.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
+        logger.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
         return
-    logging.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
+    logger.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
 
 
 def playlist_list(args):
@@ -259,7 +273,7 @@ def playlist_play(args):
 
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
-        logging.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
+        logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
     play_list = Playlist(play_list_file)
@@ -367,12 +381,12 @@ def playlist_play(args):
 
     def _skip_head(current_index):
         
-        logging.debug('==start==')
-        logging.debug(f'cur index: {current_index}')
-        logging.debug(f'position_in_playlist: {position_in_playlist[0]}')
-        logging.debug(f'current_video_position: {ac.current_video_position}')
-        logging.debug(f'seek to {format_time(play_list.skip_head)}')
-        logging.debug('== end ==')
+        logger.debug('==start==')
+        logger.debug(f'cur index: {current_index}')
+        logger.debug(f'position_in_playlist: {position_in_playlist[0]}')
+        logger.debug(f'current_video_position: {ac.current_video_position}')
+        logger.debug(f'seek to {format_time(play_list.skip_head)}')
+        logger.debug('== end ==')
 
         if position_in_playlist[0] > 0:
             if position_in_playlist[0] > ac.current_video_position:

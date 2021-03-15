@@ -36,6 +36,8 @@ SSDP_BROADCAST_PARAMS = [
 SSDP_BROADCAST_MSG = "\r\n".join(SSDP_BROADCAST_PARAMS)
 UPNP_DEFAULT_SERVICE_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
 
+logger = logging.getLogger('pysimpledlna.dlna')
+logger.setLevel(logging.INFO)
 
 class SimpleDLNAServer():
 
@@ -203,7 +205,8 @@ class SimpleDLNAServer():
 
         request = urllibreq.Request(action_url, action_data, headers)
         res = urllibreq.urlopen(request)
-        return res.read().decode("utf-8")
+        content = res.read().decode("utf-8")
+        return content
 
 
 class Device():
@@ -416,29 +419,29 @@ class EasyThread(threading.Thread):
     def run(self):
         try:
             while self.__running.isSet():
-                logging.debug('thread waiting...')
+                logger.debug('thread waiting...')
                 self.__flag.wait() # return immediately when it is True, block until the internal flag is True when it is False
-                logging.debug('thread running...')
+                logger.debug('thread running...')
                 self.__current_status = ThreadStatus.RUNNING
                 self.do_it()
-            logging.debug('thread end')
+            logger.debug('thread end')
         finally:
             if self.stophook is not None:
-                logging.debug('call thread stop callback')
+                logger.debug('call thread stop callback')
                 self.stophook()
             self.__current_status = ThreadStatus.STOPPED
 
     def pause(self):
-        logging.debug('set thread to pause')
+        logger.debug('set thread to pause')
         self.__current_status = ThreadStatus.PAUSED
         self.__flag.clear() # Set to False to block the thread
 
     def resume(self):
-        logging.debug('set thread to resume')
+        logger.debug('set thread to resume')
         self.__flag.set() # Set to True, let the thread stop blocking
 
     def stop(self, stophook=None):
-        logging.debug('set thread to stop')
+        logger.debug('set thread to stop')
         self.stophook = stophook
         self.__flag.set() # Resume the thread from the suspended state, if it is already suspended
         self.__running.clear() # Set to False
@@ -502,7 +505,7 @@ class DlnaDeviceSyncThread(EasyThread):
         transportstatehook = self.device.transportstatehook
         positionhook = self.device.positionhook
 
-        logging.debug('-------start-------------')
+        logger.debug('-------start-------------')
 
         if self.last_status is None:
             self.call_hook(transportstatehook, 'CurrentTransportState', None, transport_info['CurrentTransportState'])
@@ -527,7 +530,7 @@ class DlnaDeviceSyncThread(EasyThread):
                            , last_position_info['RelTimeInSeconds'], position_info['RelTimeInSeconds'])
             self.call_hook(positionhook, 'UpdatePositionEnd', None, 0)
 
-        logging.debug('-------end-------------')
+        logger.debug('-------end-------------')
         self.last_status = {
             'transport_info': transport_info,
             'position_info': position_info
