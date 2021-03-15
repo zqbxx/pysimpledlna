@@ -463,8 +463,8 @@ class DlnaDeviceSyncThread(EasyThread):
         if func is None:
             return
         try:
-            if old_value is None or old_value != new_value:
-                func(type, old_value, new_value)
+            #if old_value is None or old_value != new_value:
+            func(type, old_value, new_value)
         except:
             traceback.print_exc()
 
