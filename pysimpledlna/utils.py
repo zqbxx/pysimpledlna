@@ -1,3 +1,6 @@
+import fnmatch
+import re
+from typing import List
 from xml.dom.minidom import Childless
 from enum import Enum
 import time
@@ -90,15 +93,25 @@ def get_free_tcp_port():
 
 class Playlist:
 
-    def __init__(self, file_path, min_save_interval=30):
+    def __init__(self, file_path, filter: str = None, input: List[str] = None, min_save_interval=30):
         self.file_path = file_path
         self._current_index = 0
+        self._current_file_path = None
         self._current_pos = 0
         self._file_list = []
         self.min_save_interval = min_save_interval
         self.last_save = 0
         self._skip_head = 0
         self._skip_tail = 0
+        self._filter = filter
+        self._input = input
+
+    def filter_files(self):
+        if self._filter is not None:
+            regex = fnmatch.translate(self._filter)
+            pattern = re.compile(regex)
+        self._file_list = [os.path.join(input_dir, file_name) for input_dir in self._input for file_name in
+                           os.listdir(input_dir) if pattern is not None and pattern.search(file_name) is not None]
 
     def load_playlist(self):
         if not os.path.isfile(self.file_path):
@@ -107,18 +120,21 @@ class Playlist:
         import codecs
         with open(self.file_path, 'r', encoding="utf-8-sig") as f:
             jo = json.loads(f.read())
-        if jo.get('current_index') is not None:
-            self._current_index = int(jo.get('current_index'))
-        if jo.get('current_pos') is not None:
-            self._current_pos = int(jo.get('current_pos'))
         if jo.get('file_list') is not None:
             self._file_list = jo.get('file_list')
-
+        if jo.get('current_index') is not None:
+            self._current_index = int(jo.get('current_index'))
+            self._current_file_path = self._file_list[self._current_index]
+        if jo.get('current_pos') is not None:
+            self._current_pos = int(jo.get('current_pos'))
         if jo.get('skip_head') is not None:
             self._skip_head = jo.get('skip_head')
-
         if jo.get('skip_tail') is not None:
             self._skip_tail = jo.get('skip_tail')
+        if jo.get('filter') is not None:
+            self._filter = jo.get('filter')
+        if jo.get('input') is not None:
+            self._input = jo.get('input')
 
     def save_playlist(self, force=False):
         current = time.time()
@@ -130,10 +146,34 @@ class Playlist:
                 "file_list": self._file_list,
                 "skip_head": self._skip_head,
                 "skip_tail": self._skip_tail,
+                "filter": self._filter,
+                "input": self._input,
             }, ensure_ascii=False, indent=2)
             with open(self.file_path, 'w', encoding="utf-8") as fp:
                 fp.write(json_str)
             self.last_save = current
+
+    def refresh_playlist(self):
+        current_file = self._file_list[self._current_index]
+
+        self.filter_files()
+
+        self._current_index = 0
+
+        for i, f in enumerate(self._file_list):
+            if os.path.exists(current_file) and os.path.samefile(f, current_file):
+                self._current_index = i
+                break
+
+        # 刷新后没有找到当前的文件，位置信息也需要清0
+        if self._current_index == 0:
+            self._current_pos = 0
+
+        self.save_playlist(force=True)
+
+    @property
+    def current_file_path(self):
+        return self._current_file_path
 
     @property
     def current_index(self):
@@ -142,6 +182,7 @@ class Playlist:
     @current_index.setter
     def current_index(self, current_index):
         self._current_index = current_index
+        self._current_file_path = self._file_list[self._current_index]
 
     @property
     def current_pos(self):

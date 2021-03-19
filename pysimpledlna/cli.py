@@ -56,7 +56,10 @@ def main():
     wrap_parser_exit(playlist_play_parser)
 
     _, playlist_list_parser = create_playlist_list_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_play_parser)
+    wrap_parser_exit(playlist_list_parser)
+
+    _, playlist_refresh_parser = create_playlist_refresh_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_refresh_parser)
 
     args = parser.parse_args()
     try:
@@ -106,9 +109,9 @@ def create_playlist_parser(subparsers):
 def create_playlist_create_parser(subparsers):
     command = 'create'
     parser = subparsers.add_parser(command, help='create playlist')
-    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='playlist name')
-    parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+', help='folders')
-    parser.add_argument('-f', '--filter', dest='filter', required=False, type=str, help='filter')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+', help='包含目标文件的目录')
+    parser.add_argument('-f', '--filter', dest='filter', required=False, type=str, help='文件过滤器')
     parser.add_argument('-sh', '--skip-head', dest='skip_head', required=False, type=int, default=0, help='跳过片头时间')
     parser.add_argument('-st', '--skip-tail', dest='skip_tail', required=False, type=int, default=0, help='跳过片尾时间')
     parser.set_defaults(func=playlist_create)
@@ -144,6 +147,14 @@ def create_playlist_list_parser(subparsers):
     parser = subparsers.add_parser(command, help='列出所有播放列表')
     parser.set_defaults(func=playlist_list)
 
+    return command, parser
+
+
+def create_playlist_refresh_parser(subparsers):
+    command = 'refresh'
+    parser = subparsers.add_parser(command, help='刷新播放列表')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    parser.set_defaults(func=playlist_refresh)
     return command, parser
 
 
@@ -199,16 +210,16 @@ def playlist_create(args):
     play_list_file = get_playlist_file_path(args)
     input_dirs: [] = args.input
     filename_filter: str = args.filter
-    pattern = None
-    if filename_filter is not None:
-        regex = fnmatch.translate(filename_filter)
-        pattern = re.compile(regex)
-    files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
-             if pattern is not None and pattern.search(file_name) is not None]
-    pl = Playlist(play_list_file)
+    #pattern = None
+    #if filename_filter is not None:
+    #    regex = fnmatch.translate(filename_filter)
+    #    pattern = re.compile(regex)
+    #files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
+    #         if pattern is not None and pattern.search(file_name) is not None]
+    pl = Playlist(play_list_file, filter=filename_filter, input=input_dirs)
     pl.skip_head = args.skip_head
     pl.skip_tail = args.skip_tail
-    pl._file_list = files
+    pl.filter_files()
     pl.save_playlist()
 
     logger.info('播放列表已保存:' + play_list_file)
@@ -429,6 +440,18 @@ def playlist_play(args):
             device.stop_sync_remote_player_status()
             dlna_server.stop_server()
             player.clear()
+
+
+def playlist_refresh(args):
+    play_list_file = get_playlist_file_path(args)
+    if not os.path.exists(play_list_file):
+        logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
+        return
+
+    play_list = Playlist(play_list_file)
+    play_list.load_playlist()
+    play_list.refresh_playlist()
+    print(f'播放列表{args.name}刷新完成')
 
 
 def get_playlist_file_path(args):
