@@ -61,6 +61,9 @@ def main():
     _, playlist_refresh_parser = create_playlist_refresh_parser(playlist_subparsers)
     wrap_parser_exit(playlist_refresh_parser)
 
+    _, playlist_update_parser = create_playlist_update_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_update_parser)
+
     args = parser.parse_args()
     try:
         _DLNA_SERVER.start_server()
@@ -155,6 +158,18 @@ def create_playlist_refresh_parser(subparsers):
     parser = subparsers.add_parser(command, help='刷新播放列表')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.set_defaults(func=playlist_refresh)
+    return command, parser
+
+
+def create_playlist_update_parser(subparsers):
+    command = 'update'
+    parser = subparsers.add_parser(command, help='更新播放列表')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    parser.add_argument('-vi', '--video-index', dest='video_index', required=False, type=int, default=-1, help='当前视频序号，从0开始')
+    parser.add_argument('-vp', '--video-position', dest='video_pos', required=False, type=int, default=-1, help='当前视频播放位置，单位：秒')
+    parser.add_argument('-sh', '--skip-head', dest='skip_head', required=False, type=int, default=-1, help='跳过片头时间')
+    parser.add_argument('-st', '--skip-tail', dest='skip_tail', required=False, type=int, default=-1, help='跳过片尾时间')
+    parser.set_defaults(func=playlist_update)
     return command, parser
 
 
@@ -452,6 +467,27 @@ def playlist_refresh(args):
     play_list.load_playlist()
     play_list.refresh_playlist()
     print(f'播放列表{args.name}刷新完成')
+
+
+def playlist_update(args):
+    play_list_file = get_playlist_file_path(args)
+    if not os.path.exists(play_list_file):
+        logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
+        return
+
+    play_list = Playlist(play_list_file)
+    play_list.load_playlist()
+
+    if args.skip_head > -1:
+        play_list.skip_head = args.skip_head
+    if args.skip_tail > -1:
+        play_list.skip_tail = args.skip_tail
+    if args.video_index > -1:
+        play_list.current_index = args.video_index
+    if args.video_pos > -1:
+        play_list.current_pos = args.video_pos
+    play_list.save_playlist(force=True)
+    print(f'播放列表{args.name}更新完成')
 
 
 def get_playlist_file_path(args):
