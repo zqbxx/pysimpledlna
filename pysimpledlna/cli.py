@@ -3,6 +3,8 @@ import time
 import signal
 import logging
 
+from pysimpledlna.ui.playlist import PlayListEditor
+
 logging.basicConfig(  # filename=,
     format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
     datefmt='%H:%M:%S',
@@ -22,9 +24,9 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    Playlist, get_playlist_dir, get_user_data_dir, get_free_tcp_port,
+    get_playlist_dir, get_user_data_dir, get_free_tcp_port,
     wait_interval)
-
+from pysimpledlna.entity import Playlist
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
 _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
@@ -63,6 +65,9 @@ def main():
 
     _, playlist_update_parser = create_playlist_update_parser(playlist_subparsers)
     wrap_parser_exit(playlist_update_parser)
+
+    _, playlist_view_parser = create_playlist_view_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_view_parser)
 
     args = parser.parse_args()
     try:
@@ -170,6 +175,14 @@ def create_playlist_update_parser(subparsers):
     parser.add_argument('-sh', '--skip-head', dest='skip_head', required=False, type=int, default=-1, help='跳过片头时间')
     parser.add_argument('-st', '--skip-tail', dest='skip_tail', required=False, type=int, default=-1, help='跳过片尾时间')
     parser.set_defaults(func=playlist_update)
+    return command, parser
+
+
+def create_playlist_view_parser(subparsers):
+    command = 'view'
+    parser = subparsers.add_parser(command, help='更新播放列表')
+    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    parser.set_defaults(func=playlist_view)
     return command, parser
 
 
@@ -488,6 +501,20 @@ def playlist_update(args):
         play_list.current_pos = args.video_pos
     play_list.save_playlist(force=True)
     print(f'播放列表{args.name}更新完成')
+
+
+def playlist_view(args):
+    play_list_file = get_playlist_file_path(args)
+    if not os.path.exists(play_list_file):
+        logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
+        return
+
+    play_list = Playlist(play_list_file)
+    play_list.load_playlist()
+
+    editor = PlayListEditor(play_list)
+    editor.create_content()
+    editor.run()
 
 
 def get_playlist_file_path(args):

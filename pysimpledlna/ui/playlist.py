@@ -2,8 +2,13 @@ import threading
 import time
 from queue import Queue, Empty
 
+from prompt_toolkit import Application
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.input import Input
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.bindings.focus import focus_next
+from prompt_toolkit.layout import CompletionsMenu, Layout
+from prompt_toolkit.lexers import DynamicLexer, PygmentsLexer
 from prompt_toolkit.output import ColorDepth, Output
 from prompt_toolkit.formatted_text import (
     HTML,
@@ -12,23 +17,27 @@ from prompt_toolkit.formatted_text import (
 )
 from typing import TextIO, List
 
-from prompt_toolkit.styles import BaseStyle
+from prompt_toolkit.styles import BaseStyle, Style
 
 from prompt_toolkit_ext.progress import ProgressModel, Progress
 from prompt_toolkit_ext.widgets import RadioList
 from prompt_toolkit_ext.event import KeyEvent
 from prompt_toolkit.layout.dimension import AnyDimension, D
 from prompt_toolkit.formatted_text.utils import fragment_list_width
+
+from pysimpledlna.ui.editor import ApplicationState
 from pysimpledlna.ui.terminal import PlayerStatus
 from prompt_toolkit.shortcuts.progress_bar.formatters import Formatter, Text
 import abc
 import os
 
-from prompt_toolkit.layout.containers import HSplit, VSplit, Window
+from prompt_toolkit.layout.containers import HSplit, VSplit, Window, ConditionalContainer, WindowAlign, Float
 from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.widgets import Box, Label
+from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, Button, MenuContainer, MenuItem
 from typing import Optional, Sequence, Tuple
 import logging
+
+from pysimpledlna.entity import Playlist
 
 
 class PlayListPlayer(Progress):
@@ -294,6 +303,7 @@ class PlayListPlayer(Progress):
                 if seek_queue_has_data:
                     execute_queue(seek_queue)
                 if switch_queue_has_data:
+                    logging.debug('execute switch queue')
                     execute_queue(switch_queue)
 
             elif is_seek_key:
@@ -486,3 +496,181 @@ class VideoFileFormatter(VideoBaseFormatter):
     def get_render_text(self, player: "PlayerModel"):
         return player.video_file
 
+
+class PlayListEditor:
+    
+    def __init__(self, playlist: Playlist, editable=False) -> None:
+        self.playlist: Playlist = playlist
+        self.editable = False
+        self.text_field = None
+        self.application = None
+        self.key_bindings = None
+        self.layout = None
+        self.play_info_dialog = None
+        self.skip_info_dialog = None
+
+        self.focus_index = 0
+
+    def run(self):
+        if self.application is not None:
+            self.application.run()
+
+    def create_key_bindings(self):
+        kb = KeyBindings()
+
+        @kb.add('c-q')
+        def _(event):
+            self.exit()
+
+        kb.add("tab")(focus_next)
+
+        self.key_bindings = kb
+
+    def create_content(self):
+
+        # 文本编辑器
+        text_editor = self.create_text_editor()
+
+        # 播放列表属性编辑器
+        property_editor = self.create_property_editor()
+
+        body = HSplit(
+            [
+                VSplit([
+                    property_editor,
+                    Window(width=1, char="|", style="class:line"),
+                    text_editor,
+                ], height=D(), ),
+                ConditionalContainer(
+                    content=VSplit(
+                        [
+                            Window(
+                                FormattedTextControl(self.get_statusbar_text), style="class:status"
+                            ),
+                            Window(
+                                FormattedTextControl(self.get_statusbar_right_text),
+                                style="class:status.right",
+                                width=9,
+                                align=WindowAlign.RIGHT,
+                            ),
+                        ],
+                        height=1,
+                    ),
+                    filter=Condition(lambda: ApplicationState.show_status_bar),
+                ),
+            ])
+
+        self.create_key_bindings()
+
+        root_container = MenuContainer(
+            body=body,
+            menu_items=[
+                MenuItem(
+                    "File",
+                    children=[
+                        MenuItem("Exit", handler=self.exit),
+                    ],
+                ),
+            ],
+            floats=[
+                Float(
+                    xcursor=True,
+                    ycursor=True,
+                    content=CompletionsMenu(max_height=16, scroll_offset=1),
+                ),
+            ],
+            key_bindings=self.key_bindings,
+        )
+
+        style = Style.from_dict(
+            {
+                "status": "reverse",
+                "shadow": "bg:#440044",
+            }
+        )
+
+        self.layout = Layout(root_container, focused_element=self.text_field)
+
+        self.application = Application(
+            layout=self.layout,
+            enable_page_navigation_bindings=True,
+            style=style,
+            mouse_support=True,
+            full_screen=True,
+        )
+
+    def create_property_editor(self):
+
+        current_file_path = self.playlist.file_list[self.playlist.current_index]
+        _, current_file_name = os.path.split(current_file_path)
+
+        self.play_info_dialog = Dialog(modal=False, title="播放记录", body=HSplit([
+                Label(''),
+                Label(' 播放文件'),
+                Button(
+                    f'{current_file_name}',
+                ),
+                Label(' 播放位置'),
+                Button(
+                    f'{self.playlist.current_pos}',
+                ),
+                Label(''),
+            ], width=38, padding=1))
+        self.skip_info_dialog = Dialog(modal=False, title="设置", body=HSplit([
+                Label(''),
+                Label(' 跳过片头'),
+                Button(
+                    f'{self.playlist.skip_head}',
+                ),
+                Label(' 跳过片尾'),
+                Button(
+                    f'{self.playlist.skip_tail}',
+                ),
+                Label(''),
+            ], width=38, padding=1))
+
+        left_window = HSplit([
+            Label(''),
+            self.play_info_dialog,
+            Label(''),
+            self.skip_info_dialog,
+        ], width=40, padding=2)
+        return left_window
+
+    def create_text_editor(self):
+        search_toolbar = SearchToolbar()
+        text = ''
+        for file_path in self.playlist.file_list:
+            text += file_path + '\n'
+        self.text_field = TextArea(
+            text=text,
+            read_only=True,
+            #lexer=DynamicLexer(
+            #    lambda: PygmentsLexer.from_filename(
+            #        ApplicationState.current_path or ".txt", sync_from_start=False
+            #    )
+            #),
+            scrollbar=True,
+            line_numbers=True,
+            search_field=search_toolbar,
+        )
+        text_editor = HSplit(
+            [
+                self.text_field,
+                search_toolbar
+            ]
+        )
+        return text_editor
+
+    def exit(self):
+        if self.application.is_running:
+            self.application.exit()
+
+    def get_statusbar_text(self):
+        return " Press ctrl-q to exit. "
+
+    def get_statusbar_right_text(self):
+        return " {}:{}  ".format(
+            self.text_field.document.cursor_position_row + 1,
+            self.text_field.document.cursor_position_col + 1,
+        )

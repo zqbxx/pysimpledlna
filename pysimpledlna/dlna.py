@@ -19,9 +19,8 @@ import traceback
 import logging
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
-    to_seconds, wait_interval,
-    ThreadStatus)
-
+    to_seconds, wait_interval)
+from pysimpledlna.entity import ThreadStatus
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
 SSDP_BROADCAST_PORT = 1900
