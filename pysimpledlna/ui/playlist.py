@@ -25,7 +25,6 @@ from prompt_toolkit_ext.event import KeyEvent
 from prompt_toolkit.layout.dimension import AnyDimension, D
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 
-from pysimpledlna.ui.editor import ApplicationState
 from pysimpledlna.ui.terminal import PlayerStatus
 from prompt_toolkit.shortcuts.progress_bar.formatters import Formatter, Text
 import abc
@@ -508,12 +507,15 @@ class PlayListEditor:
         self.layout = None
         self.play_info_dialog = None
         self.skip_info_dialog = None
-
+        self.show_status_bar = True
         self.focus_index = 0
 
     def run(self):
         if self.application is not None:
             self.application.run()
+
+    def is_show_status_bar(self):
+        return self.show_status_bar
 
     def create_key_bindings(self):
         kb = KeyBindings()
@@ -556,7 +558,7 @@ class PlayListEditor:
                         ],
                         height=1,
                     ),
-                    filter=Condition(lambda: ApplicationState.show_status_bar),
+                    filter=Condition(lambda: self.is_show_status_bar()),
                 ),
             ])
 
