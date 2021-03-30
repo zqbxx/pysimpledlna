@@ -18,8 +18,6 @@ logger = logging.getLogger('pysimpledlna.cli')
 logger.setLevel(logging.INFO)
 
 
-import re
-import fnmatch
 import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
@@ -33,9 +31,6 @@ _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
 
 
 def main():
-
-    #logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
-
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -238,12 +233,6 @@ def playlist_create(args):
     play_list_file = get_playlist_file_path(args)
     input_dirs: [] = args.input
     filename_filter: str = args.filter
-    #pattern = None
-    #if filename_filter is not None:
-    #    regex = fnmatch.translate(filename_filter)
-    #    pattern = re.compile(regex)
-    #files = [os.path.join(input_dir, file_name) for input_dir in input_dirs for file_name in os.listdir(input_dir)
-    #         if pattern is not None and pattern.search(file_name) is not None]
     pl = Playlist(play_list_file, filter=filename_filter, input=input_dirs)
     pl.skip_head = args.skip_head
     pl.skip_tail = args.skip_tail
@@ -280,6 +269,9 @@ def playlist_list(args):
 
 
 def playlist_play(args):
+
+    # TODO 检测文件是否存在
+    # TODO formatters, bottom_toolbar改为默认值
 
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
@@ -334,28 +326,20 @@ def playlist_play(args):
     player_model: PlayerModel = player.create_model()
     ac = ActionController(file_list, device, player_model)
 
-    def on(type, old_value, new_value):
-        if type == 'selected':
+    def _item_checked(old_value, new_value):
+        old_file_path = old_value[0]
+        old_file_name = old_value[1]
 
-            old_file_path = old_value[0]
-            old_file_name = old_value[1]
+        new_file_path = new_value[0]
+        new_file_name = new_value[1]
 
-            new_file_path = new_value[0]
-            new_file_name = new_value[1]
+        if os.path.samefile(old_file_path, new_file_path):
+            return True
 
-            if os.path.samefile(old_file_path, new_file_path):
-                return True
+        selected_index = playlist_contents.get_selected_index()
 
-            selected_index = playlist_contents.get_selected_index()
-
-            ac.current_idx = selected_index
-            ac.play()
-        return True
-
-    playlist_contents.add_enter_handle(on)
-
-    player.create_key_bindings()
-    player.create_ui()
+        ac.current_idx = selected_index
+        ac.play()
 
     def _update_list_ui(current_index):
         playlist_contents.current_value = playlist_contents.values[current_index][0]
@@ -398,6 +382,11 @@ def playlist_play(args):
     def _update_playlist_video_position(o_position, n_position):
         play_list.current_pos = n_position
         play_list.save_playlist()
+
+    playlist_contents.check_event += _item_checked
+
+    player.create_key_bindings()
+    player.create_ui()
 
     player.player_events['quit'] += lambda e: ac.stop_device()
     player.controller_events['pause'] += \
