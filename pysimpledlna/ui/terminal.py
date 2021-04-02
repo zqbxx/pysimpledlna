@@ -26,7 +26,7 @@ class Player:
 
         self.pause = False
 
-        self._excpetion: Exception = None
+        self._exception: Exception = None
 
     def draw(self):
 
@@ -42,8 +42,8 @@ class Player:
 
             msg = self._video_file_name
 
-            if self._excpetion is not None:
-                msg = str(self._excpetion)
+            if self._exception is not None:
+                msg = str(self._exception)
 
             name_columns = sum(wcwidth(c) for c in msg)
             if name_columns <= remain_columns:
@@ -65,11 +65,11 @@ class Player:
 
     @property
     def exception(self):
-        return self._excpetion
+        return self._exception
 
     @exception.setter
     def exception(self, e: Exception):
-        self._excpetion = e
+        self._exception = e
 
     @property
     def duration(self):

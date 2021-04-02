@@ -13,7 +13,6 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.web.static import File
 
-from threading import Thread, Event
 import time
 import traceback
 import logging
@@ -37,6 +36,7 @@ UPNP_DEFAULT_SERVICE_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
 
 logger = logging.getLogger('pysimpledlna.dlna')
 logger.setLevel(logging.INFO)
+
 
 class SimpleDLNAServer():
 
@@ -85,12 +85,6 @@ class SimpleDLNAServer():
         if server_file is None:
             return False
         return True
-
-    def update_server_ip(self, target_ip, target_port=80):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((target_ip, target_port))
-        self.server_ip = s.getsockname()[0]
-        s.close()
 
     def set_files(self, device, file):
 
