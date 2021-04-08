@@ -2,6 +2,9 @@
 
 from setuptools import setup, find_packages
 from io import StringIO, open
+import fnmatch
+from setuptools.command.build_py import build_py as build_py_orig
+import os
 
 
 def read_file(filename):
@@ -21,6 +24,29 @@ def read_README(filename):
                    if not line.startswith('.. comment::'))
 
 
+excluded = ['pysimpledlna/win.py',
+            'pysimpledlna/cli.py',
+            'pysimpledlna/ac.py',
+            'pysimpledlna/ui/*.py',
+            'test/*.py']
+
+def filter_py_file(item):
+    print(item)
+    return False
+
+
+class build_py(build_py_orig):
+
+    def find_package_modules(self, package, package_dir):
+        modules = super().find_package_modules(package, package_dir)
+        for (pkg, mod, file) in modules:
+            print(f'custom build py {pkg} - {mod} - {file}')
+        return [
+            (pkg, mod, file)
+            for (pkg, mod, file) in modules
+            if not any(fnmatch.fnmatchcase(file, pat=os.path.normpath(pattern)) for pattern in excluded)
+        ]
+
 setup(
     name="pysimpledlna",
     version="0.3.0",
@@ -34,14 +60,8 @@ setup(
 
     install_requires=read_requirements('requirements.txt'),
 
-    entry_points={
-        'console_scripts': [
-            'pysimpledlna = pysimpledlna.cli:main',
-            'pysimpledlnaW = pysimpledlna.win:main',
-        ]
-    },
-
-    packages=find_packages(),
+    packages=find_packages(exclude=['pysimpledlna.ui', 'test']),
+    cmdclass={'build_py': build_py},
     package_dir={'pysimpledlna': 'pysimpledlna'},
     package_data={'pysimpledlna': ['templates/*.xml']},
 
@@ -51,11 +71,12 @@ setup(
         "Topic :: ",
         'Environment :: Console',
         'Intended Audience :: Developers',
-        'Intended Audience :: End Users/Desktop',
         "License :: MIT",
         'Natural Language :: Chinese',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Multimedia :: Sound/Audio',
         'Topic :: Multimedia :: Video',
