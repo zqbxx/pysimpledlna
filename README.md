@@ -8,13 +8,13 @@ pysimpledlna
 
 说明
 ------
-:hammer_and_wrench: [编译](doc/compile.md)
+:hammer_and_wrench: [编译](docs/compile.md)
 
-:books: [使用说明](doc/usage.md)
+:books: [使用说明](docs/usage.md)
 
-:toolbox: [作为依赖库安装](doc/install.md)
+:toolbox: [作为依赖库安装](docs/install.md)
 
-:gear: [使用api](doc/api.md)
+:gear: [使用api](docs/api.md)
 
 
 计划完成的功能
