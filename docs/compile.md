@@ -14,6 +14,6 @@ git clone https://github.com/zqbxx/prompt_toolkit_ext.git
 ./complie.sh
 ```
 5. 配置环境变量
-将pysimpledlna.exe文件所在的目录加入到环境变量PATH中，输入[命令](02.usage.md)使用
+将pysimpledlna.exe文件所在的目录加入到环境变量PATH中，输入[命令](usage.md)使用
 
 
