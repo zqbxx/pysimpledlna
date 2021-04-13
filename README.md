@@ -3,47 +3,20 @@ pysimpledlna
 
 介绍
 ------
-一个简单dlna投屏工具，参考和使用了以下项目<br/>
-<https://pypi.org/project/dlna/><br/>
-<https://pypi.org/project/nanodlna/><br/>
-<https://github.com/cherezov/dlnap>
+一个dlna投屏工具
 
-安装
+
+说明
 ------
-```
-git clone https://github.com/zqbxx/pysimpledlna.git
-cd pysimpledlna
-py setup.py install
-```
+:hammer_and_wrench: [编译](doc/compile.md)
 
-命令行使用
-------
-:one: 查找DLNA设备
-```
-> pysimpledlna list
-[ 1 ] Kodi (DESKTOP-O7IVEPH) @ http://192.168.199.151:1901/
-```
+:books: [使用说明](doc/usage.md)
 
-:two: 播放视频
-```
-> pysimpledlna play -i test.mkv -u http://192.168.199.151:1901/
-```
+:toolbox: [作为依赖库安装](doc/install.md)
 
-Windows右键支持
-------
-:one: 安装右键菜单
-```
-> pysimpledlnaW install
-```
+:gear: [使用api](doc/api.md)
 
-:two: 删除右键菜单
-```
-> pysimpledlnaW uninstall
-```
-:three: 播放视频
-```
-在包含mp4, mkv文件的目录上右键 -> DLNA Share，程序自动选择第一台DLNA设备播放目录中的视频
-```
+
 计划完成的功能
 ------
 - [x] 播放列表
@@ -56,3 +29,9 @@ Windows右键支持
 - [ ] 手机控制
   - [ ] 实现web ui
   - [ ] 手机扫码连接
+  
+参考项目
+------
+1. <https://pypi.org/project/dlna/>
+2. <https://pypi.org/project/nanodlna/>
+3. <https://github.com/cherezov/dlnap>
