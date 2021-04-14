@@ -49,7 +49,7 @@ class build_py(build_py_orig):
 
 setup(
     name="pysimpledlna",
-    version="0.3.0",
+    version="0.5.0",
     author="wx c",
     description=("PySimpleDlna is a dlna server. It allows you to stream your videos to devices on your connected home network."),
     license="MIT",
