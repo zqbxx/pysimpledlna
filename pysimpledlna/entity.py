@@ -4,7 +4,8 @@ import os
 import re
 import time
 from enum import Enum
-from typing import List
+from pathlib import Path
+from typing import List, Dict
 
 
 class ThreadStatus(Enum):
@@ -137,3 +138,39 @@ class Playlist:
     @skip_tail.setter
     def skip_tail(self, skip_tail):
         self._skip_tail = skip_tail
+
+
+class Settings:
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.d = self.read()
+        self.original = self.d.copy()
+        if 'default_device' not in self.d:
+            self.d['default_device'] = ''
+
+    def set_default_device(self, url: str):
+        self.d['default_device'] = url
+
+    def get_default_device(self):
+        return self.d['default_device']
+
+    def read(self) -> Dict[str, str]:
+        try:
+            with open(self.file_path, 'r', encoding='utf-8-sig') as f:
+                d: Dict[str, str] = json.load(f)
+                return d
+        except:
+            return {}    # empty dict
+
+    def write(self) -> None:
+        if self.d == self.original:
+            return
+        self._make_dir()
+        with open(self.file_path, "w", encoding='utf-8') as f:
+            json.dump(self.d, f, indent=2)
+
+    def _make_dir(self) -> None:
+        folder = Path(self.file_path).parent
+        if not folder.is_dir():
+            folder.mkdir(parents=True)

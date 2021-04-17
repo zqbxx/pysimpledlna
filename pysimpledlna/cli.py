@@ -23,8 +23,8 @@ from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
     get_playlist_dir, get_user_data_dir, get_free_tcp_port,
-    wait_interval)
-from pysimpledlna.entity import Playlist
+    wait_interval, get_setting_file_path)
+from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
 _DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
@@ -36,6 +36,10 @@ def main():
     wrap_parser_exit(parser)
 
     subparsers = parser.add_subparsers(help='DLAN Server')
+
+    _, list_parser = create_default_device_parser(subparsers)
+    wrap_parser_exit(list_parser)
+
     _, list_parser = create_list_parser(subparsers)
     wrap_parser_exit(list_parser)
 
@@ -80,6 +84,14 @@ def wrap_parser_exit(parser: argparse.ArgumentParser):
         exit_func(status, message)
 
     parser.exit = exit
+
+
+def create_default_device_parser(subparsers):
+    command = 'default-device'
+    parser = subparsers.add_parser(command, help='设置默认设备')
+    parser.add_argument('-u', '--url', dest='url', required=True, type=str, help='DLNA设备地址')
+    parser.set_defaults(func=default_device)
+    return command, parser
 
 
 def create_list_parser(subparsers):
@@ -181,6 +193,19 @@ def create_playlist_view_parser(subparsers):
     return command, parser
 
 
+def default_device(args):
+    dlna_server = _DLNA_SERVER
+    device = dlna_server.find_device(args.url)
+    if device is None:
+        print('设备不存在')
+        return
+    setting_file_path = get_setting_file_path()
+    settings = Settings(setting_file_path)
+    settings.set_default_device(args.url)
+    settings.write()
+    print(f'配置已经保存在: {setting_file_path}')
+
+
 def list_device(args):
     dlna_server = _DLNA_SERVER
     device_found = False
@@ -203,11 +228,14 @@ def play(args):
     else:
         url = args.url
         if url is None:
-            device = None
+            settings = Settings(get_setting_file_path())
+            default_device_url = settings.get_default_device()
+            device = dlna_server.find_device(default_device_url)
         else:
             device = dlna_server.parse_xml(url)
+
     if device is None:
-        print('No Device available')
+        print('没有找到DLNA设备')
         return
 
     dlna_server.register_device(device)
@@ -293,7 +321,10 @@ def playlist_play(args):
     else:
         url = args.url
         if url is None:
-            device = None
+            if url is None:
+                settings = Settings(get_setting_file_path())
+                default_device_url = settings.get_default_device()
+                device = dlna_server.find_device(default_device_url)
         else:
             device = dlna_server.parse_xml(url)
     if device is None:
@@ -446,6 +477,7 @@ def playlist_play(args):
 
         try:
             while True:
+                # TODO 需要检查界面是否结束，网络出问题时ac.end可能不会被设置
                 if ac.end:
                     play_list.current_pos = ac.current_video_position
                     play_list.current_index = ac.current_idx

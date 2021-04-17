@@ -72,6 +72,11 @@ def get_desktop_dir():
     return desktop
 
 
+def get_setting_file_path():
+    user_dir = get_user_data_dir()
+    return os.path.join(user_dir, 'settings.json')
+
+
 def get_free_tcp_port():
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp.bind(('', 0))
