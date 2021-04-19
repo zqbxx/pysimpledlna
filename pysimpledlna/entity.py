@@ -5,7 +5,7 @@ import re
 import time
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Union
 
 
 class ThreadStatus(Enum):
@@ -144,21 +144,29 @@ class Settings:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        self.d = self.read()
+        self.d: Dict[str, Union[str, bool]] = self.read()
         self.original = self.d.copy()
         if 'default_device' not in self.d:
             self.d['default_device'] = ''
+        if 'enable_ssl' not in self.d:
+            self.d['enable_ssl'] = False
 
     def set_default_device(self, url: str):
         self.d['default_device'] = url
 
-    def get_default_device(self):
+    def set_enable_ssl(self, enable_ssl:bool):
+        self.d['enable_ssl'] = enable_ssl
+
+    def get_default_device(self) -> str:
         return self.d['default_device']
 
-    def read(self) -> Dict[str, str]:
+    def get_enable_ssl(self) -> bool:
+        return self.d['enable_ssl']
+
+    def read(self) -> Dict[str, Union[str, bool]]:
         try:
             with open(self.file_path, 'r', encoding='utf-8-sig') as f:
-                d: Dict[str, str] = json.load(f)
+                d: Dict[str, Union[str, bool]] = json.load(f)
                 return d
         except:
             return {}    # empty dict

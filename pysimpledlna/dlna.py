@@ -3,12 +3,13 @@ import pkgutil
 import socket
 import threading
 import urllib.request as urllibreq
+from pathlib import Path
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
 
 import requests
-from twisted.internet import reactor
+from twisted.internet import reactor, ssl
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.web.static import File
@@ -18,8 +19,8 @@ import traceback
 import logging
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
-    to_seconds, wait_interval)
-from pysimpledlna.entity import ThreadStatus
+    to_seconds, wait_interval, get_setting_file_path)
+from pysimpledlna.entity import ThreadStatus, Settings
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
 SSDP_BROADCAST_PORT = 1900
@@ -46,9 +47,15 @@ class SimpleDLNAServer():
         self.server_ip = socket.gethostbyname(socket.gethostname())
         self.known_devices = {}
         self.is_server_started = False
+        self.is_ssl_enabled = Settings(get_setting_file_path()).get_enable_ssl()
 
     def start_server(self):
-        reactor.listenTCP(self.server_port, Site(self.root), interface="0.0.0.0")
+        if self.is_ssl_enabled and Path('./server.key').exists() and Path('./server.crt').exists():
+            logger.info('ssl已启用')
+            reactor.listenSSL(self.server_port, Site(self.root),
+                              ssl.DefaultOpenSSLContextFactory('./server.key', './server.crt'))
+        else:
+            reactor.listenTCP(self.server_port, Site(self.root), interface="0.0.0.0")
         threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}).start()
         self.is_server_started = True
 
@@ -90,7 +97,10 @@ class SimpleDLNAServer():
 
         file_path = os.path.abspath(file)
         file_name = os.path.basename(file_path)
-        file_url = "http://{0}:{1}/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, file_name)
+        if self.is_ssl_enabled:
+            file_url = "https://{0}:{1}/{2}/{3}".format(socket.gethostname(), self.server_port, device.device_key, file_name)
+        else:
+            file_url = "http://{0}:{1}/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, file_name)
 
         return file_name, file_url, file_path
 

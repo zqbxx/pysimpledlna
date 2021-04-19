@@ -87,10 +87,11 @@ def wrap_parser_exit(parser: argparse.ArgumentParser):
 
 
 def create_default_device_parser(subparsers):
-    command = 'default-device'
-    parser = subparsers.add_parser(command, help='设置默认设备')
-    parser.add_argument('-u', '--url', dest='url', required=True, type=str, help='DLNA设备地址')
-    parser.set_defaults(func=default_device)
+    command = 'default'
+    parser = subparsers.add_parser(command, help='设置参数')
+    parser.add_argument('-u', '--url', dest='url', required=False, type=str, default=None, help='默认DLNA设备地址')
+    parser.add_argument('-es', '--enable-ssl', dest='enable_ssl', required=False, type=str, default=None, choices=['True', 'False'], help='是否启用SSL')
+    parser.set_defaults(func=default)
     return command, parser
 
 
@@ -193,15 +194,25 @@ def create_playlist_view_parser(subparsers):
     return command, parser
 
 
-def default_device(args):
+def default(args):
     dlna_server = _DLNA_SERVER
-    device = dlna_server.find_device(args.url)
-    if device is None:
-        print('设备不存在')
-        return
     setting_file_path = get_setting_file_path()
     settings = Settings(setting_file_path)
-    settings.set_default_device(args.url)
+
+    if args.url is not None:
+        device = dlna_server.find_device(args.url)
+        if device is None:
+            print('设备不存在，默认设备没有保存')
+        settings.set_default_device(args.url)
+
+    if args.enable_ssl is not None:
+        enable_ssl = args.enable_ssl == 'True'
+        settings.set_enable_ssl(enable_ssl)
+        if enable_ssl:
+            print('ssl已经启用')
+        else:
+            print('ssl已经停用')
+
     settings.write()
     print(f'配置已经保存在: {setting_file_path}')
 
