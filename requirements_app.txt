@@ -4,3 +4,4 @@ appdirs
 requests
 pyOpenSSL
 service_identity
+prompt_toolkit

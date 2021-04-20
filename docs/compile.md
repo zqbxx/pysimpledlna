@@ -8,12 +8,16 @@
 git clone https://github.com/zqbxx/pysimpledlna.git
 git clone https://github.com/zqbxx/prompt_toolkit_ext.git
 ```
-4. 编译
+4. 安装依赖
+```bash
+pip install -r ./pysimpledlna/requirements_app.txt
+```
+5. 编译
 进入./pysimpledlna/complie目录，右键-> `git bash here`
 ```bash
 ./complie.sh
 ```
-5. 配置环境变量
-将pysimpledlna.exe文件所在的目录加入到环境变量PATH中，输入[命令](usage.md)使用
+6. 配置环境变量
+将pysimpledlna.exe文件所在的目录加入到环境变量PATH中，启动新的命令行，输入[命令](usage.md)使用
 
 
