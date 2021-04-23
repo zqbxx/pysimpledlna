@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
 
 import requests
-from twisted.internet import reactor, ssl
+from twisted.internet import reactor
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 from twisted.web.static import File
@@ -48,14 +48,20 @@ class SimpleDLNAServer():
         self.known_devices = {}
         self.is_server_started = False
         self.is_ssl_enabled = Settings(get_setting_file_path()).get_enable_ssl()
+        self.device_count = 0
 
     def start_server(self):
         if self.is_ssl_enabled and Path('./server.key').exists() and Path('./server.crt').exists():
-            logger.info('ssl已启用')
-            reactor.listenSSL(self.server_port, Site(self.root),
-                              ssl.DefaultOpenSSLContextFactory('./server.key', './server.crt'))
+            try:
+                from twisted.internet import ssl
+                reactor.listenSSL(self.server_port, Site(self.root),
+                                  ssl.DefaultOpenSSLContextFactory('./server.key', './server.crt'))
+            except Exception as e:
+                print(e)
+                traceback.format_exc(e)
+                traceback.print_exc(file=open('error.txt', 'a+'))
         else:
-            reactor.listenTCP(self.server_port, Site(self.root), interface="0.0.0.0")
+            reactor.listenTCP(self.server_port, Site(self.root), interface='0.0.0.0')
         threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}).start()
         self.is_server_started = True
 
@@ -98,9 +104,9 @@ class SimpleDLNAServer():
         file_path = os.path.abspath(file)
         file_name = os.path.basename(file_path)
         if self.is_ssl_enabled:
-            file_url = "https://{0}:{1}/{2}/{3}".format(socket.gethostname(), self.server_port, device.device_key, file_name)
+            file_url = "https://{0}:{1}/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, file_name)
         else:
-            file_url = "http://{0}:{1}/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, file_name)
+            file_url = "http://{0}:{1}/{2}/{3}".format (self.server_ip, self.server_port, device.device_key, file_name)
 
         return file_name, file_url, file_path
 
@@ -121,23 +127,26 @@ class SimpleDLNAServer():
             X_DLNADOC = device_element.getElementsByTagName('dlna:X_DLNADOC')[0].firstChild.data
             UDN = device_element.getElementsByTagName('UDN')[0].firstChild.data
             UID = device_element.getElementsByTagName('UID')[0].firstChild.data
-            '''
-
+            
+            
             urlgroup = urlparse(url)
             device_key = urlgroup.hostname.replace('.', '_')
 
             if urlgroup.port:
                 from builtins import str
                 device_key += '__' + str(urlgroup.port)
+            '''
+            device_key = str(self.device_count)
+            self.device_count += 1
 
             avtranspor_control_url = None
             rendering_control_url = None
             serviceType_elements = device_element.getElementsByTagName('serviceType')
             for serviceType_element in serviceType_elements:
-                str = serviceType_element.firstChild.data
-                if 'urn:schemas-upnp-org:service:AVTranspor' in str:
+                urn_data = serviceType_element.firstChild.data
+                if 'urn:schemas-upnp-org:service:AVTranspor' in urn_data:
                     avtranspor_control_url = serviceType_element.parentNode.getElementsByTagName('controlURL')[0].firstChild.data
-                elif 'urn:schemas-upnp-org:service:RenderingControl' in str:
+                elif 'urn:schemas-upnp-org:service:RenderingControl' in urn_data:
                     rendering_control_url = serviceType_element.parentNode.getElementsByTagName('controlURL')[0].firstChild.data
 
             device = Device(self, location=url, host=urlparse(url).hostname
@@ -418,7 +427,6 @@ class EasyThread(threading.Thread):
 
         self.stophook = None
 
-
     def run(self):
         try:
             while self.__running.isSet():
@@ -515,7 +523,6 @@ class DlnaDeviceSyncThread(EasyThread):
             self.call_hook(positionhook, 'TrackURI', None, position_info['TrackURI'])
             self.call_hook(positionhook, 'TrackDurationInSeconds', None, position_info['TrackDurationInSeconds'])
             self.call_hook(positionhook, 'RelTimeInSeconds', None, position_info['RelTimeInSeconds'])
-
         else:
             last_position_info = self.last_status['position_info']
             last_transport_info = self.last_status['transport_info']
@@ -534,9 +541,11 @@ class DlnaDeviceSyncThread(EasyThread):
             self.call_hook(positionhook, 'UpdatePositionEnd', None, 0)
 
         logger.debug('-------end-------------')
-        self.last_status = {
-            'transport_info': transport_info,
-            'position_info': position_info
-        }
+
+        if self.last_status is None:
+            self.last_status = {}
+        self.last_status['transport_info'] = transport_info
+        self.last_status['position_info'] = position_info
+
         self.count += 1
         wait_interval(self.interval, start, time.time())
