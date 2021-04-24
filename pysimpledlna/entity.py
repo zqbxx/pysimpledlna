@@ -30,11 +30,18 @@ class Playlist:
         self._input = input
 
     def filter_files(self):
+
+        self._file_list.clear()
+
         if self._filter is not None:
             regex = fnmatch.translate(self._filter)
             pattern = re.compile(regex)
-        self._file_list = [os.path.join(input_dir, file_name) for input_dir in self._input for file_name in
-                           os.listdir(input_dir) if pattern is not None and pattern.search(file_name) is not None]
+
+        filter_str = self._filter if self._filter is not None else '*'
+
+        for input_dir in self._input:
+            input_dir_path = Path(input_dir)
+            self._file_list += [ str(fpath) for fpath in input_dir_path.glob(filter_str) if fpath.is_file()]
 
     def load_playlist(self):
         if not os.path.isfile(self.file_path):
@@ -56,8 +63,19 @@ class Playlist:
             self._skip_tail = jo.get('skip_tail')
         if jo.get('filter') is not None:
             self._filter = jo.get('filter')
-        if jo.get('input') is not None:
-            self._input = jo.get('input')
+        else:
+            self._filter = "*"
+
+        self._input: List[str] = []
+        input_dirs = jo.get('input')
+        if input_dirs is None:
+            if len(self._file_list) > 0:
+                input_dirs = [str(Path(self._file_list[0]).parent)]
+
+        for input_dir in input_dirs:
+            input_dir_path = Path(input_dir)
+            if input_dir_path.exists() and input_dir_path.is_dir():
+                self._input.append(str(input_dir_path))
 
     def save_playlist(self, force=False):
         current = time.time()
@@ -77,6 +95,10 @@ class Playlist:
             self.last_save = current
 
     def refresh_playlist(self):
+
+        if self._input is None:
+            return
+
         current_file = self._file_list[self._current_index]
 
         self.filter_files()
