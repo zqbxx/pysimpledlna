@@ -1,4 +1,5 @@
 import argparse
+import json
 import time
 import signal
 import logging
@@ -53,6 +54,9 @@ def main():
     _, playlist_create_parser = create_playlist_create_parser(playlist_subparsers)
     wrap_parser_exit(playlist_create_parser)
 
+    _, playlist_delete_parser = create_playlist_delete_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_delete_parser)
+
     _, playlist_play_parser = create_playlist_play_parser(playlist_subparsers)
     wrap_parser_exit(playlist_play_parser)
 
@@ -87,17 +91,18 @@ def wrap_parser_exit(parser: argparse.ArgumentParser):
 
 
 def create_default_device_parser(subparsers):
-    command = 'default'
+    command = 'config'
     parser = subparsers.add_parser(command, help='设置参数')
     parser.add_argument('-u', '--url', dest='url', required=False, type=str, default=None, help='默认DLNA设备地址')
     parser.add_argument('-es', '--enable-ssl', dest='enable_ssl', required=False, type=str, default=None, choices=['True', 'False'], help='是否启用SSL')
+    parser.add_argument('-p', '--print', dest='print_opts', required=False, default=False, action='store_true', help='是否输出配置信息')
     parser.set_defaults(func=default)
     return command, parser
 
 
 def create_list_parser(subparsers):
     command = 'list'
-    parser = subparsers.add_parser(command, help='list dlna device')
+    parser = subparsers.add_parser(command, help='查找DLNA设备')
     parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
     parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int,
                              help='maximum number of dlna device')
@@ -214,7 +219,11 @@ def default(args):
             print('ssl已经停用')
 
     settings.write()
-    print(f'配置已经保存在: {setting_file_path}')
+    print(f'配置文件: {setting_file_path}')
+
+    if args.print_opts:
+        print(json.dumps(settings.d, indent=2))
+
 
 
 def list_device(args):
@@ -278,25 +287,25 @@ def playlist_create(args):
     pl.filter_files()
     pl.save_playlist()
 
-    logger.info('播放列表已保存:' + play_list_file)
+    print('播放列表已保存:' + play_list_file)
 
 
 def playlist_delete(args):
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
-        logger.info('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
+        print('播放列表[' + args.name + ']['+ play_list_file + ']不存在')
         return
     if os.path.isfile(play_list_file):
         os.remove(play_list_file)
-        logger.info('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
+        print('播放列表[' + args.name + ']['+ play_list_file + ']已删除')
         return
-    logger.info('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
+    print('播放列表不是文件，无法删除[' + args.name + ']['+ play_list_file + ']')
 
 
 def playlist_list(args):
     user_dir = get_user_data_dir()
     play_list_dir = get_playlist_dir(user_dir, 'playlist')
-    play_list = [ os.path.splitext(f)[0] for f in os.listdir(play_list_dir) if os.path.isfile(os.path.join(play_list_dir, f)) and f.endswith('.playlist')]
+    play_list = [os.path.splitext(f)[0] for f in os.listdir(play_list_dir) if os.path.isfile(os.path.join(play_list_dir, f)) and f.endswith('.playlist')]
 
     print('播放列表目录：', play_list_dir)
 
@@ -363,8 +372,10 @@ def playlist_play(args):
         Text(" "),
         VideoFileFormatter()
     ]
-    bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条')
-    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar)
+    device_root = "http://{0}:{1}/{2}".format(dlna_server.server_ip, dlna_server.server_port, device.device_key)
+    #device_root = ''
+    bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ' + device_root)
+    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar, is_refresh_ui=True)
     player_model: PlayerModel = player.create_model()
     ac = ActionController(file_list, device, player_model)
 
