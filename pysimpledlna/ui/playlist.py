@@ -538,9 +538,10 @@ class PlayListEditor:
 
         body = HSplit(
             [
-                VSplit([
+                HSplit([
                     property_editor,
-                    Window(width=1, char="|", style="class:line"),
+                    Label(' '),
+                    Window(height=1, char="-", style="class:line"),
                     text_editor,
                 ], height=D(), ),
                 ConditionalContainer(
@@ -631,10 +632,8 @@ class PlayListEditor:
                 Label(''),
             ], width=38, padding=1))
 
-        left_window = HSplit([
-            Label(''),
+        left_window = VSplit([
             self.play_info_dialog,
-            Label(''),
             self.skip_info_dialog,
         ], width=40, padding=2)
         return left_window
