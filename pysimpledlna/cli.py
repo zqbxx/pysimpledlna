@@ -375,7 +375,7 @@ def playlist_play(args):
     device_root = "http://{0}:{1}/{2}".format(dlna_server.server_ip, dlna_server.server_port, device.device_key)
     #device_root = ''
     bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ' + device_root)
-    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar, is_refresh_ui=True)
+    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar)
     player_model: PlayerModel = player.create_model()
     ac = ActionController(file_list, device, player_model)
 
