@@ -22,7 +22,7 @@ from prompt_toolkit.styles import BaseStyle, Style
 from prompt_toolkit_ext.progress import ProgressModel, Progress
 from prompt_toolkit_ext.widgets import RadioList
 from prompt_toolkit_ext.event import KeyEvent
-from prompt_toolkit.layout.dimension import AnyDimension, D
+from prompt_toolkit.layout.dimension import AnyDimension, D, Dimension
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 
 from pysimpledlna.ui.terminal import PlayerStatus
@@ -55,8 +55,8 @@ class PlayListPlayer(Progress):
                  ) -> None:
 
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
-        self.left_part = None
-        self.right_part = None
+        self.bottom_part = None
+        self.top_part = None
         self.progress_controls_part = None
         self.player_controls_part = None
         self.player_controls_keybindings = None
@@ -128,23 +128,20 @@ class PlayListPlayer(Progress):
             Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
         ])
 
-        self.right_part = HSplit([
+        self.top_part = HSplit([
             self.progress_controls_part,
             Window(height=1, char="-", style="class:line"),
             self.player_controls_part,
         ])
 
-        self.left_part = Box(self.playlist_part, height=10, width=30)
+        self.bottom_part = Box(self.playlist_part, height=Dimension(), width=Dimension())
 
         parts = []
         if self.top_text is not None:
             parts.append(Window(FormattedTextControl(self.top_text),
                                 height=len(self.top_text), style="reverse"))
-        parts.append(Window(height=1, char="-"))
-        parts.append(VSplit([self.left_part, Window(width=1, char="|"), self.right_part]))
-        parts.append(Window(height=1, char="-"))
-
-        body = HSplit(parts)
+        parts.append(HSplit([self.top_part, Window(height=1, char="-"), self.bottom_part], width=Dimension()))
+        body = VSplit(parts)
         return body
 
     def create_ui(self):
@@ -165,7 +162,7 @@ class PlayListPlayer(Progress):
 
         @player_kb.add(self.player_events['focus_playlist'].key)
         def _(event):
-            self.app.layout.focus(self.left_part)
+            self.app.layout.focus(self.bottom_part)
             self.player_events['focus_playlist'].fire(event)
 
         @player_kb.add(self.player_events['focus_controller'].key)
@@ -331,11 +328,11 @@ class PlayListPlayer(Progress):
                 if self.event_queue.qsize() > 0:
                     break
 
-    def get_left_part(self):
-        return self.left_part
+    def get_bottom_part(self):
+        return self.bottom_part
 
-    def get_right_part(self):
-        return self.right_part
+    def get_top_part(self):
+        return self.top_part
 
 
 class PlayerModel(ProgressModel):
