@@ -1,8 +1,39 @@
+import random
+from pathlib import Path
 from xml.dom.minidom import Childless
 import time
 import os
 import appdirs
 import socket
+
+BASE_RAND_STR = 'ABCDEFGHIGKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789'
+BASE_RAND_STR_LEN = len(BASE_RAND_STR)
+
+
+def random_str(str_len=16)->str:
+    result_str = ''
+    length = BASE_RAND_STR_LEN - 1
+    for i in range(str_len):
+        result_str += BASE_RAND_STR[random.randint(0, length)]
+    return result_str
+
+
+def is_in_nuitka() -> bool:
+    t = os.environ.get("nuitka", None)
+    return t is not None
+
+
+def get_abs_path(rel_path=None) -> Path:
+
+    if is_in_nuitka():
+        if rel_path is None:
+            return Path(os.environ.get('nuitka_exe_dir')) / Path(rel_path)
+        else:
+            return Path(os.environ.get('nuitka_exe_dir'))
+    elif rel_path is not None:
+        return Path(rel_path)
+    else:
+        return Path('.').absolute()
 
 
 def get_element_data_by_tag_name(doc, tag_name, index=0, default=None) -> str:

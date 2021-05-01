@@ -3,23 +3,24 @@ import pkgutil
 import socket
 import threading
 import urllib.request as urllibreq
+from http.server import HTTPServer
 from pathlib import Path
+from socketserver import ThreadingTCPServer
+from typing import TypeVar, Callable, List
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
 
 import requests
-from twisted.internet import reactor
-from twisted.web.resource import Resource
-from twisted.web.server import Site
-from twisted.web.static import File
-
 import time
 import traceback
 import logging
+
+from bottle import ServerAdapter, Bottle, static_file
+
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
-    to_seconds, wait_interval, get_setting_file_path)
+    to_seconds, wait_interval, get_setting_file_path, random_str)
 from pysimpledlna.entity import ThreadStatus, Settings
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
@@ -35,6 +36,8 @@ SSDP_BROADCAST_PARAMS = [
 SSDP_BROADCAST_MSG = "\r\n".join(SSDP_BROADCAST_PARAMS)
 UPNP_DEFAULT_SERVICE_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
 
+_Resource = TypeVar("_Resource", bound="Resource")
+
 logger = logging.getLogger('pysimpledlna.dlna')
 logger.setLevel(logging.INFO)
 
@@ -43,72 +46,57 @@ class SimpleDLNAServer():
 
     def __init__(self, server_port):
         self.server_port = server_port
-        self.root = Resource()
+        self.root = DLNARootRootResource(self)
+        self.app = Bottle()
+        self.server = None
         self.server_ip = socket.gethostbyname(socket.gethostname())
         self.known_devices = {}
         self.is_server_started = False
-        self.is_ssl_enabled = Settings(get_setting_file_path()).get_enable_ssl()
+        self.setting = Settings(get_setting_file_path())
+        self.is_ssl_enabled = self.setting.get_enable_ssl()
+        self.cert_file = self.setting.get_cert_file()
+        self.key_file = self.setting.get_key_file()
         self.device_count = 0
 
     def start_server(self):
-        if self.is_ssl_enabled and Path('./server.key').exists() and Path('./server.crt').exists():
-            try:
-                from twisted.internet import ssl
-                reactor.listenSSL(self.server_port, Site(self.root),
-                                  ssl.DefaultOpenSSLContextFactory('./server.key', './server.crt'))
-            except Exception as e:
-                print(e)
-                traceback.format_exc(e)
-                traceback.print_exc(file=open('error.txt', 'a+'))
-        else:
-            reactor.listenTCP(self.server_port, Site(self.root), interface='0.0.0.0')
-        threading.Thread(target=reactor.run, kwargs={"installSignalHandlers": False}).start()
+        init_event = threading.Event()
+        threading.Thread(target=self._run_server, args=(init_event, )).start()
+        init_event.wait()
         self.is_server_started = True
+
+    def _run_server(self, init_event: threading.Event):
+
+        self.server = SSLCherootAdapter(
+            host=self.server_ip,
+            port=self.server_port,
+            cert_file=self.cert_file,
+            key_file=self.key_file,
+            enable_ssl=self.is_ssl_enabled,
+            init_event=init_event,
+            dlna_server=self)
+
+        self.app.route(self.root.get_route_str(), self.root.get_method(), self.root.get_render())
+        self.app.run(quiet=True, server=self.server)
 
     def stop_server(self):
         if self.is_server_started:
-            reactor.stop()
+            self.app.close()
+            self.server.close()
             self.is_server_started = False
 
-    def add_file_to_server(self, device, file_path):
-
-        file_name, file_url, file_path = self.set_files(device, file_path)
-        device_resource = self.root.children.get(device.device_key)
-
-        if device_resource is None:
-            device_resource = Resource()
-            self.root.putChild(device.device_key.encode("utf-8"), device_resource)
-        self.root.children[device.device_key.encode("utf-8")].putChild(file_name.encode("utf-8"), File(file_path))
-
-        return file_url
-
-    def get_device_root(self, device):
-        device_root = self.root.children.get(device.device_key)
+    def get_device_root(self, device) -> _Resource:
+        device_root = self.root.get(device.device_key, None)
         if device_root is None:
             device_root = Resource()
-            self.root.putChild(device.device_key.encode("utf-8"), device_root)
+            self.root[device.device_key] = device_root
         return device_root
 
-    def is_file_on_server(self, device, file_path):
-        file_name, file_url, file_path = self.set_files(file_path)
-        device_resource = self.root.children.get(device.UID)
-        if device_resource is None:
-            return False
-        server_file = device_resource.children.get(file_name.encode("utf-8"))
-        if server_file is None:
-            return False
-        return True
-
-    def set_files(self, device, file):
-
-        file_path = os.path.abspath(file)
-        file_name = os.path.basename(file_path)
+    def get_server_file_path(self, device, key: str):
         if self.is_ssl_enabled:
-            file_url = "https://{0}:{1}/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, file_name)
+            file_url = "https://{0}:{1}/device/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, key)
         else:
-            file_url = "http://{0}:{1}/{2}/{3}".format (self.server_ip, self.server_port, device.device_key, file_name)
-
-        return file_name, file_url, file_path
+            file_url = "http://{0}:{1}/device/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, key)
+        return file_url
 
     def parse_xml(self, url):
         try:
@@ -255,15 +243,18 @@ class Device():
         self.sync_thread = DlnaDeviceSyncThread(self, interval=self.sync_remote_player_interval)
 
     def add_file(self, file_path):
-        file_name, file_url, file_path = self.dlna_server.set_files(self, file_path)
-        self.video_files.putChild(file_name.encode("utf-8"), File(file_path))
+        p_file_path = Path(file_path)
+        # TODO 随机文件名作为配置项
+        file_key = random_str() + p_file_path.suffix
+        self.video_files[file_key] = p_file_path
+        file_url = self.dlna_server.get_server_file_path(self, file_key)
         return file_url
-
+    '''
     def remove_file(self, file_path):
         file_name, file_url, file_path = self.dlna_server.set_files(self, file_path)
         if self.video_files.children.get(file_name.encode("utf-8")) is not None:
             del self.video_files.children[file_name.encode("utf-8")]
-
+    '''
     def set_sync_interval(self, interval):
         self.sync_remote_player_interval = interval
         self.sync_thread.interval = interval
@@ -404,6 +395,183 @@ class Device():
             return ret_data
         except Exception as e:
             raise e
+
+
+class Resource(dict):
+
+    def get_route_str(self)->str:
+        ...
+
+    def get_method(self)->str:
+        ...
+
+    def get_render(self) -> Callable:
+        ...
+
+
+class DefaultResource(Resource):
+
+    def __init__(self, route_str: str, method: List[str]) -> None:
+        super().__init__()
+        self.route_str = route_str
+        self.method = method
+        self.render = None
+
+    def get_route_str(self) -> str:
+        return self.route_str
+
+    def get_method(self) -> List[str]:
+        return self.method
+
+    def get_render(self) -> Callable:
+        return self.render
+
+
+class DLNARootRootResource(DefaultResource):
+
+    def __init__(self, server: SimpleDLNAServer) -> None:
+        super().__init__('/device/<device_key>/<filename>', ['POST', 'GET'])
+        self.server = server
+        self.render = self.render_request
+
+    def render_request(self, device_key, filename):
+        # TODO 校验客户端地址，与device保持一致
+        file_path: Path = self[device_key][filename]
+        return static_file(file_path.name, root=str(file_path.parent))
+
+
+class SSLCherootAdapter(ServerAdapter):
+
+    def __init__(self, host='127.0.0.1', port=8080, **options):
+        super().__init__(host, port, **options)
+        self.server = None
+
+    def run(self, handler):
+        from cheroot import wsgi
+        from cheroot.ssl.builtin import BuiltinSSLAdapter
+        import ssl
+
+        self.server = wsgi.Server((self.host, self.port), handler)
+
+        cert_file = self.options.get('cert_file', None)
+        key_file = self.options.get('key_file', None)
+        enable_ssl = self.options.get('enable_ssl', False)
+
+        p_cert_file = Path(cert_file)
+        p_key_file = Path(key_file)
+
+        if p_cert_file.exists() and p_key_file.exists() and enable_ssl:
+            self.server.ssl_adapter = BuiltinSSLAdapter(str(p_cert_file.absolute()), str(p_key_file.absolute()))
+
+            # By default, the server will allow negotiations with extremely old protocols
+            # that are susceptible to attacks, so we only allow TLSv1.2
+            self.server.ssl_adapter.context.options |= ssl.OP_NO_TLSv1
+            self.server.ssl_adapter.context.options |= ssl.OP_NO_TLSv1_1
+        else:
+            dlna_server: SimpleDLNAServer = self.options.get('dlna_server')
+            dlna_server.is_ssl_enabled = False
+
+        self.server.prepare()
+
+        # 必须在self.server被赋值后触发初始化完成时间
+        # 这里在开启循环前触发，保证服务器已经启动
+        init_event: threading.Event = self.options.get('init_event', None)
+        if init_event is not None:
+            init_event.set()
+
+        self.server.serve()
+
+    def close(self):
+        self.server.stop()
+
+
+class SSLWSGIRefServer(ServerAdapter):
+
+    def __init__(self, host='127.0.0.1', port=8080, **options):
+        super().__init__(host, port, **options)
+        self.srv = None
+
+    def run(self, app):
+
+        from wsgiref.simple_server import make_server
+        from wsgiref.simple_server import WSGIRequestHandler
+        import socket
+
+        class FixedHandler(WSGIRequestHandler):
+
+            def address_string(self):  # Prevent reverse DNS lookups please.
+                return self.client_address[0]
+
+            def log_request(*args, **kw):
+                if not self.quiet:
+                    return WSGIRequestHandler.log_request(*args, **kw)
+
+        FixedHandler.protocol_version = 'HTTP/1.1'
+        handler_cls = self.options.get('handler_class', FixedHandler)
+        server_cls = self.options.get('server_class', ThreadingWSGIServer)
+
+        if ':' in self.host:  # Fix wsgiref for IPv6 addresses.
+            if getattr(server_cls, 'address_family') == socket.AF_INET:
+
+                class server_cls(server_cls):
+                    address_family = socket.AF_INET6
+
+        self.srv = make_server(self.host, self.port, app, server_cls, handler_cls)
+        self.port = self.srv.server_port  # update port actual port (0 means random)
+
+        cert_file = self.options.get('cert_file', None)
+        key_file = self.options.get('key_file', None)
+        enable_ssl = self.options.get('enable_ssl', False)
+
+        if cert_file is not None and key_file is not None and enable_ssl:
+            p_cert_file = Path(cert_file)
+            p_key_file = Path(key_file)
+            if p_cert_file.exists() and p_key_file.exists():
+                import ssl
+                print('ssl')
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(p_cert_file.absolute(), p_key_file.absolute())
+                self.srv.socket = context.wrap_socket(self.srv.socket, server_side=True)
+            else:
+                dlna_server: SimpleDLNAServer = self.options.get('dlna_server')
+                dlna_server.is_ssl_enabled = False
+
+        init_event: threading.Event = self.options.get('init_event', None)
+        if init_event is not None:
+            init_event.set()
+
+        self.srv.serve_forever()
+
+    def close(self):
+        if self.srv is not None:
+            self.srv.server_close()
+            self.srv.shutdown()
+
+
+class ThreadingWSGIServer(ThreadingTCPServer):
+
+    application = None
+
+    def server_bind(self):
+        """Override server_bind to store the server name."""
+        HTTPServer.server_bind(self)
+        self.setup_environ()
+
+    def setup_environ(self):
+        # Set up base environment
+        env = self.base_environ = {}
+        env['SERVER_NAME'] = self.server_name
+        env['GATEWAY_INTERFACE'] = 'CGI/1.1'
+        env['SERVER_PORT'] = str(self.server_port)
+        env['REMOTE_HOST']=''
+        env['CONTENT_LENGTH']=''
+        env['SCRIPT_NAME'] = ''
+
+    def get_app(self):
+        return self.application
+
+    def set_app(self,application):
+        self.application = application
 
 
 class StatusException(Exception):

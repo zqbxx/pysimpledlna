@@ -172,6 +172,10 @@ class Settings:
             self.d['default_device'] = ''
         if 'enable_ssl' not in self.d:
             self.d['enable_ssl'] = False
+        if 'cert_file' not in self.d:
+            self.d['cert_file'] = ''
+        if 'key_file' not in self.d:
+            self.d['key_file']  = ''
 
     def set_default_device(self, url: str):
         self.d['default_device'] = url
@@ -179,11 +183,23 @@ class Settings:
     def set_enable_ssl(self, enable_ssl:bool):
         self.d['enable_ssl'] = enable_ssl
 
+    def set_cert_file(self, cert_file: str):
+        self.d['cert_file'] = cert_file
+
+    def set_key_file(self, key_file: str):
+        self.d['key_file'] = key_file
+
     def get_default_device(self) -> str:
         return self.d['default_device']
 
     def get_enable_ssl(self) -> bool:
         return self.d['enable_ssl']
+
+    def get_cert_file(self):
+        return self.d['cert_file']
+
+    def get_key_file(self):
+        return self.d['key_file']
 
     def read(self) -> Dict[str, Union[str, bool]]:
         try:

@@ -23,8 +23,7 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    get_playlist_dir, get_user_data_dir, get_free_tcp_port,
-    wait_interval, get_setting_file_path)
+    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path)
 from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -94,8 +93,10 @@ def create_default_device_parser(subparsers):
     command = 'config'
     parser = subparsers.add_parser(command, help='设置参数')
     parser.add_argument('-u', '--url', dest='url', required=False, type=str, default=None, help='默认DLNA设备地址')
-    parser.add_argument('-es', '--enable-ssl', dest='enable_ssl', required=False, type=str, default=None, choices=['True', 'False'], help='是否启用SSL')
+    parser.add_argument('-es', '--enable-ssl', dest='enable_ssl', required=False, type=str, default=None, choices=['True', 'true', 'False', 'false', ], help='是否启用SSL')
     parser.add_argument('-p', '--print', dest='print_opts', required=False, default=False, action='store_true', help='是否输出配置信息')
+    parser.add_argument('-cert', '--cert-file', dest='cert_file', required=False, default=None, help='用于https的公钥')
+    parser.add_argument('-key', '--key-file', dest='key_file', required=False, default=None, help='用于https的私钥')
     parser.set_defaults(func=default)
     return command, parser
 
@@ -104,8 +105,7 @@ def create_list_parser(subparsers):
     command = 'list'
     parser = subparsers.add_parser(command, help='查找DLNA设备')
     parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
-    parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int,
-                             help='maximum number of dlna device')
+    parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int, help='查找DLNA设备的最大数量')
     parser.set_defaults(func=list_device)
     return command, parser
 
@@ -205,18 +205,17 @@ def default(args):
     settings = Settings(setting_file_path)
 
     if args.url is not None:
-        device = dlna_server.find_device(args.url)
-        if device is None:
-            print('设备不存在，默认设备没有保存')
         settings.set_default_device(args.url)
 
     if args.enable_ssl is not None:
-        enable_ssl = args.enable_ssl == 'True'
+        enable_ssl = (args.enable_ssl == 'True' or args.enable_ssl == 'true')
         settings.set_enable_ssl(enable_ssl)
-        if enable_ssl:
-            print('ssl已经启用')
-        else:
-            print('ssl已经停用')
+
+    if args.cert_file is not None:
+        settings.set_cert_file(args.cert_file)
+
+    if args.key_file is not None:
+        settings.set_key_file(args.key_file)
 
     settings.write()
     print(f'配置文件: {setting_file_path}')
