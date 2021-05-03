@@ -3,10 +3,11 @@ import pkgutil
 import socket
 import threading
 import urllib.request as urllibreq
+from enum import Enum
 from http.server import HTTPServer
 from pathlib import Path
 from socketserver import ThreadingTCPServer
-from typing import TypeVar, Callable, List
+from typing import TypeVar, Callable, List, Dict
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 import xml.dom.minidom as xmldom
@@ -20,8 +21,7 @@ from bottle import ServerAdapter, Bottle, static_file
 
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
-    to_seconds, wait_interval, get_setting_file_path, random_str)
-from pysimpledlna.entity import ThreadStatus, Settings
+    to_seconds, wait_interval, random_str)
 
 SSDP_BROADCAST_ADDR = "239.255.255.250"
 SSDP_BROADCAST_PORT = 1900
@@ -44,7 +44,11 @@ logger.setLevel(logging.INFO)
 
 class SimpleDLNAServer():
 
-    def __init__(self, server_port):
+    def __init__(self,
+                 server_port: int = 8000,
+                 is_enable_ssl: bool = False,
+                 cert_file: str = './server.crt',
+                 key_file: str = './server.key'):
         self.server_port = server_port
         self.root = DLNARootRootResource(self)
         self.app = Bottle()
@@ -52,10 +56,9 @@ class SimpleDLNAServer():
         self.server_ip = socket.gethostbyname(socket.gethostname())
         self.known_devices = {}
         self.is_server_started = False
-        self.setting = Settings(get_setting_file_path())
-        self.is_ssl_enabled = self.setting.get_enable_ssl()
-        self.cert_file = self.setting.get_cert_file()
-        self.key_file = self.setting.get_key_file()
+        self.is_ssl_enabled = is_enable_ssl
+        self.cert_file = cert_file
+        self.key_file = key_file
         self.device_count = 0
 
     def start_server(self):
@@ -75,7 +78,8 @@ class SimpleDLNAServer():
             init_event=init_event,
             dlna_server=self)
 
-        self.app.route(self.root.get_route_str(), self.root.get_method(), self.root.get_render())
+        #self.app.route(self.root.get_route_str(), self.root.get_method(), self.root.get_render())
+        self.app.route(**self.root.get_route_params())
         self.app.run(quiet=True, server=self.server)
 
     def stop_server(self):
@@ -408,6 +412,13 @@ class Resource(dict):
     def get_render(self) -> Callable:
         ...
 
+    def get_route_params(self):
+        params = dict()
+        params['path'] = self.get_route_str()
+        params['method'] = self.get_method()
+        params['callback'] = self.get_render()
+        return params
+
 
 class DefaultResource(Resource):
 
@@ -717,3 +728,9 @@ class DlnaDeviceSyncThread(EasyThread):
 
         self.count += 1
         wait_interval(self.interval, start, time.time())
+
+
+class ThreadStatus(Enum):
+    STOPPED = 1
+    RUNNING = 2
+    PAUSED = 3

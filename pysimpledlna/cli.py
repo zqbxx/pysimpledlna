@@ -27,7 +27,13 @@ from pysimpledlna.utils import (
 from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
-_DLNA_SERVER = SimpleDLNAServer(_DLNA_SERVER_PORT)
+settings = Settings(get_setting_file_path())
+_DLNA_SERVER = SimpleDLNAServer(
+    server_port=_DLNA_SERVER_PORT,
+    is_enable_ssl=settings.get_enable_ssl(),
+    cert_file=settings.get_cert_file(),
+    key_file=settings.get_key_file()
+)
 
 
 def main():

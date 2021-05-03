@@ -3,15 +3,8 @@ import json
 import os
 import re
 import time
-from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Union
-
-
-class ThreadStatus(Enum):
-    STOPPED = 1
-    RUNNING = 2
-    PAUSED = 3
 
 
 class Playlist:
@@ -47,7 +40,6 @@ class Playlist:
         if not os.path.isfile(self.file_path):
             return
         jo = None
-        import codecs
         with open(self.file_path, 'r', encoding="utf-8-sig") as f:
             jo = json.loads(f.read())
         if jo.get('file_list') is not None:
