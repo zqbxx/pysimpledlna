@@ -38,7 +38,6 @@ import logging
 
 from pysimpledlna.entity import Playlist
 
-
 class PlayListPlayer(Progress):
 
     def __init__(self,
@@ -53,6 +52,20 @@ class PlayListPlayer(Progress):
                  output: Optional[Output] = None,
                  input: Optional[Input] = None,
                  ) -> None:
+
+        if formatters is None:
+            formatters = [
+                Text(" "),
+                VideoPositionFormatter(),
+                Text(" | "),
+                VideoControlFormatter(),
+                Text(" "),
+                VideoFileFormatter()
+            ]
+
+        if bottom_toolbar is None:
+            bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ')
+
 
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.bottom_part = None

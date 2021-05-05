@@ -324,7 +324,6 @@ def playlist_list(args):
 def playlist_play(args):
 
     # TODO 检测文件是否存在
-    # TODO formatters, bottom_toolbar改为默认值
 
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
@@ -369,18 +368,7 @@ def playlist_play(args):
     playlist_values = [(f, os.path.split(f)[1]) for f in file_list]
     playlist_contents = RadioList(values=playlist_values)
 
-    formatters = [
-        Text(" "),
-        VideoPositionFormatter(),
-        Text(" | "),
-        VideoControlFormatter(),
-        Text(" "),
-        VideoFileFormatter()
-    ]
-    device_root = "http://{0}:{1}/{2}".format(dlna_server.server_ip, dlna_server.server_port, device.device_key)
-    #device_root = ''
-    bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ' + device_root)
-    player = PlayListPlayer(playlist_contents, formatters=formatters, bottom_toolbar=bottom_toolbar)
+    player = PlayListPlayer(playlist_contents)
     player_model: PlayerModel = player.create_model()
     ac = ActionController(file_list, device, player_model)
 
@@ -504,8 +492,7 @@ def playlist_play(args):
 
         try:
             while True:
-                # TODO 需要检查界面是否结束，网络出问题时ac.end可能不会被设置
-                if ac.end:
+                if ac.end or not player.app.is_running:
                     play_list.current_pos = ac.current_video_position
                     play_list.current_index = ac.current_idx
                     play_list.save_playlist(force=True)
