@@ -323,8 +323,6 @@ def playlist_list(args):
 
 def playlist_play(args):
 
-    # TODO 检测文件是否存在
-
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
         VideoPositionFormatter, VideoControlFormatter, VideoFileFormatter)
@@ -451,24 +449,26 @@ def playlist_play(args):
 
     playlist_contents.set_checked_index(play_list.current_index)
     ac.current_idx = play_list.current_index
-    position_in_playlist = [play_list.current_pos]
+    position_in_playlist = dict()
+    position_in_playlist['current_pos'] = play_list.current_pos
+    position_in_playlist['current_index'] = play_list.current_index
 
     def _skip_head(current_index):
         
         logger.debug('==start==')
         logger.debug(f'cur index: {current_index}')
-        logger.debug(f'position_in_playlist: {position_in_playlist[0]}')
+        logger.debug(f"position_in_playlist: {position_in_playlist['current_pos']}")
         logger.debug(f'current_video_position: {ac.current_video_position}')
         logger.debug(f'seek to {format_time(play_list.skip_head)}')
         logger.debug('== end ==')
 
-        if position_in_playlist[0] > 0:
-            if position_in_playlist[0] > ac.current_video_position:
-                time_str = format_time(position_in_playlist[0])
+        if position_in_playlist['current_pos'] > 0 and position_in_playlist['current_index'] == ac.current_idx:
+            if position_in_playlist['current_pos'] > ac.current_video_position:
+                time_str = format_time(position_in_playlist['current_pos'])
                 ac.device.seek(time_str)
-                play_list.current_pos = position_in_playlist[0]
+                play_list.current_pos = position_in_playlist['current_pos']
                 play_list.save_playlist(force=True)
-                position_in_playlist[0] = -1
+                position_in_playlist['current_pos'] = -1
         elif play_list.skip_head > 0:
             time.sleep(0.5)
             time_str = format_time(play_list.skip_head)

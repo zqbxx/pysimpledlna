@@ -2,6 +2,7 @@ import logging
 import os
 import signal
 import time
+from pathlib import Path
 
 from pysimpledlna import Device
 from pysimpledlna.ui.terminal import Player, PlayerStatus
@@ -112,12 +113,7 @@ class ActionController:
         logger.debug(f'ac.play, caller: {traceback.extract_stack()[-2][2]}')
         self.enable_hook = False
 
-        if self.current_idx >= len(self.file_list):
-            self.current_idx = len(self.file_list) - 1
-            return
-
-        if self.current_idx < 0:
-            self.current_idx = 0
+        if not self.validate_current_index():
             return
 
         self.player.new_player()
@@ -142,6 +138,25 @@ class ActionController:
         finally:
             self.events['play'].fire(self.current_idx)
             self.enable_hook = True
+
+    def validate_current_index(self):
+        logger.debug(f'current_index: {self.current_idx}')
+        if self.current_idx >= len(self.file_list):
+            self.current_idx = len(self.file_list) - 1
+            return False
+
+        if self.current_idx < 0:
+            self.current_idx = 0
+            return False
+
+        while self.current_idx < len(self.file_list):
+            file_path = Path(self.file_list[self.current_idx])
+            if file_path.exists() and file_path.is_file():
+                return True
+            logger.debug(f'current index: {self.current_idx}, file {str(file_path.absolute())} does not exists')
+            self.current_idx += 1
+
+        return False
 
     def ensure_player_is_playing(self):
         for i in range(60):
