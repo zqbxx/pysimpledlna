@@ -230,15 +230,17 @@ def default(args):
         print(json.dumps(settings.d, indent=2))
 
 
-
 def list_device(args):
     dlna_server = _DLNA_SERVER
     device_found = False
+    max_number = args.max
     for i, device in enumerate(dlna_server.get_devices(args.timeout)):
         print('[', i+1, ']', device.friendly_name, '@', device.location)
         device_found = True
+        if (i+1) >= max_number:
+            break
     if not device_found:
-        print('No Device available')
+        print('没有找到设备')
 
 
 def play(args):
