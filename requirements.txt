@@ -1,6 +1,5 @@
-twisted>=16.2.0
 lxml
 appdirs
 requests
-pyOpenSSL
-service_identity
+bottle
+cheroot
