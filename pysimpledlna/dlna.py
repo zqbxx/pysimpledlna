@@ -17,7 +17,7 @@ import time
 import traceback
 import logging
 
-from bottle import ServerAdapter, Bottle, static_file
+from bottle import ServerAdapter, Bottle, static_file, request, abort
 
 from pysimpledlna.utils import (
     get_element_data_by_tag_name, get_element_by_tag_name,
@@ -40,7 +40,6 @@ _Resource = TypeVar("_Resource", bound="Resource")
 
 logger = logging.getLogger('pysimpledlna.dlna')
 logger.setLevel(logging.INFO)
-
 
 class SimpleDLNAServer():
 
@@ -119,16 +118,8 @@ class SimpleDLNAServer():
             X_DLNADOC = device_element.getElementsByTagName('dlna:X_DLNADOC')[0].firstChild.data
             UDN = device_element.getElementsByTagName('UDN')[0].firstChild.data
             UID = device_element.getElementsByTagName('UID')[0].firstChild.data
-            
-            
-            urlgroup = urlparse(url)
-            device_key = urlgroup.hostname.replace('.', '_')
-
-            if urlgroup.port:
-                from builtins import str
-                device_key += '__' + str(urlgroup.port)
             '''
-            device_key = str(self.device_count)
+            device_key = random_str(8) + str(self.device_count)
             self.device_count += 1
 
             avtranspor_control_url = None
@@ -446,9 +437,12 @@ class DLNARootRootResource(DefaultResource):
         self.render = self.render_request
 
     def render_request(self, device_key, filename):
-        # TODO 校验客户端地址，与device保持一致
-        file_path: Path = self[device_key][filename]
-        return static_file(file_path.name, root=str(file_path.parent))
+        ip = request.environ.get('REMOTE_ADDR')
+        device: Device = self.server.known_devices[device_key]
+        if device.host == ip:
+            file_path: Path = self[device_key][filename]
+            return static_file(file_path.name, root=str(file_path.parent))
+        return abort(404, "No such file.")
 
 
 class SSLCherootAdapter(ServerAdapter):
