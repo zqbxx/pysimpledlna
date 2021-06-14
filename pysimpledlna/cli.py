@@ -112,6 +112,7 @@ def create_list_parser(subparsers):
     parser = subparsers.add_parser(command, help='查找DLNA设备')
     parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
     parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int, help='查找DLNA设备的最大数量')
+    parser.add_argument('-dn', '--disable-notify', dest='disable_notify', required=False, default=False, action='store_true', help='不接收notify')
     parser.set_defaults(func=list_device)
     return command, parser
 
@@ -234,7 +235,8 @@ def list_device(args):
     dlna_server = _DLNA_SERVER
     device_found = False
     max_number = args.max
-    for i, device in enumerate(dlna_server.get_devices(args.timeout)):
+    disable_notify = args.disable_notify
+    for i, device in enumerate(dlna_server.get_devices(args.timeout, disable_notify=disable_notify)):
         print('[', i+1, ']', device.friendly_name, '@', device.location)
         device_found = True
         if (i+1) >= max_number:

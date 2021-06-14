@@ -7,6 +7,7 @@ from enum import Enum
 from http.server import HTTPServer
 from pathlib import Path
 from socketserver import ThreadingTCPServer
+from struct import pack
 from typing import TypeVar, Callable, List, Dict
 from urllib.parse import urljoin
 from urllib.parse import urlparse
@@ -41,6 +42,7 @@ _Resource = TypeVar("_Resource", bound="Resource")
 logger = logging.getLogger('pysimpledlna.dlna')
 logger.setLevel(logging.INFO)
 
+
 class SimpleDLNAServer():
 
     def __init__(self,
@@ -53,7 +55,7 @@ class SimpleDLNAServer():
         self.app = Bottle()
         self.server = None
         self.server_ip = socket.gethostbyname(socket.gethostname())
-        self.known_devices = {}
+        self.known_devices:Dict[str, Device] = {}
         self.is_server_started = False
         self.is_ssl_enabled = is_enable_ssl
         self.cert_file = cert_file
@@ -146,19 +148,29 @@ class SimpleDLNAServer():
             print(e)
             return None
 
-    def get_devices(self, timeout=10):
+    def get_devices(self, timeout=10*2, disable_notify=False):
+        if disable_notify:
+            yield from self._from_recv(timeout)
+        else:
+            timeout = timeout / 2
+            yield from self._from_recv(timeout)
+            yield from self._from_notify(timeout)
+
+    def _from_recv(self, timeout):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
         s.bind((socket.gethostbyname(socket.gethostname()), SSDP_BROADCAST_PORT + 10))
-
         s.sendto(SSDP_BROADCAST_MSG.encode(), (SSDP_BROADCAST_ADDR, SSDP_BROADCAST_PORT))
         s.settimeout(timeout)
-
         while 1:
 
             try:
                 data, addr = s.recvfrom(1024)
             except socket.timeout:
+                try:
+                    s.close()
+                finally:
+                    pass
                 break
 
             def serialize(x):
@@ -172,10 +184,91 @@ class SimpleDLNAServer():
             device_dict = dict(map(serialize, filter(lambda x: x.count(":") >= 1, data.decode().split("\r\n"))))
 
             if "AVTransport" in device_dict["st"]:
-                yield self.register_device(self.parse_xml(device_dict["location"]))
+                device = self.register_device(self.parse_xml(device_dict["location"]))
+                if device is not None:
+                    yield device
+
+    def _from_notify(self, timeout):
+        receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        receiver.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
+        receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        receiver.bind(('', SSDP_BROADCAST_PORT))
+        mreq = pack('4sl', socket.inet_aton(SSDP_BROADCAST_ADDR), socket.INADDR_ANY)
+        receiver.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        receiver.settimeout(timeout)
+        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+
+        start = time.time()
+        while 1:
+
+            try:
+                data, addr = receiver.recvfrom(1024)
+                current = time.time()
+                if current - start > timeout:
+                    break
+            except socket.timeout:
+                try:
+                    receiver.close()
+                finally:
+                    pass
+                break
+
+            def serialize(x):
+                try:
+                    k, v = x.split(":", maxsplit=1)
+                except ValueError:
+                    pass
+                else:
+                    return k.lower(), v.lstrip()
+
+            (host, port) = addr
+            header = data.decode()
+            lines = header.split('\r\n')
+            cmd = lines[0].split(' ')
+            lines = [x.replace(': ', ':', 1) for x in lines[1:]]
+            lines = [x for x in lines if len(x) > 0]
+
+            headers = [x.split(':', 1) for x in lines]
+            headers = dict([(x[0].lower(), x[1]) for x in headers])
+            device_dict = None
+            if cmd[0] == 'NOTIFY' and cmd[1] == '*':
+                device_dict = self._notify_received(headers)
+
+            if device_dict is None or 'location' not in device_dict or 'st' not in device_dict:
+                continue
+
+            if "AVTransport" in device_dict["st"]:
+                device = self.register_device(self.parse_xml(device_dict["location"]))
+                if device is not None:
+                    yield device
+
+    def _notify_received(self, headers:Dict[str, str])->Dict[str, str]:
+        if headers['nts'] == 'ssdp:alive':
+            if 'cache-control' not in headers:
+                headers['cache-control'] = 'max-age=1800'
+
+            default_fields_name = ["usn", "nt", "location", "server",
+                                       "cache-control", "host", "nts"]
+            default_header = {}
+            for field in default_fields_name:
+                default_header[field] = headers.pop(field, "")
+            if 'nt' in default_header:
+                default_header['st'] = default_header['nt']
+            else:
+                return None
+            return default_header
+        elif headers['nts'] == 'ssdp:byebye':
+            #TODO 处理下线
+            return None
+        else:
+            return None
 
     def register_device(self, device):
         if device is not None:
+            for kd in self.known_devices.values():
+                if kd.location == device.location:
+                    return None
             self.known_devices[device.device_key] = device
         return device
 
