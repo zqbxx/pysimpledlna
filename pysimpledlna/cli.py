@@ -110,7 +110,7 @@ def create_default_device_parser(subparsers):
 def create_list_parser(subparsers):
     command = 'list'
     parser = subparsers.add_parser(command, help='查找DLNA设备')
-    parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=5, type=int, help='timeout')
+    parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=20, type=int, help='timeout')
     parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int, help='查找DLNA设备的最大数量')
     parser.add_argument('-dn', '--disable-notify', dest='disable_notify', required=False, default=False, action='store_true', help='不接收notify')
     parser.set_defaults(func=list_device)
