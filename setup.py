@@ -27,8 +27,10 @@ def read_README(filename):
 excluded = ['pysimpledlna/win.py',
             'pysimpledlna/cli.py',
             'pysimpledlna/ac.py',
+            'pysimpledlna/entity.py',
             'pysimpledlna/ui/*.py',
             'test/*.py']
+
 
 def filter_py_file(item):
     print(item)
@@ -49,14 +51,14 @@ class build_py(build_py_orig):
 
 setup(
     name="pysimpledlna",
-    version="0.5.0",
+    version="0.5.1",
     author="wx c",
     description=("PySimpleDlna is a dlna server. It allows you to stream your videos to devices on your connected home network."),
     license="MIT",
     keywords="dlna",
     url="https://github.com/zqbxx/pysimpledlna",
 
-    python_requires='>=3.7',
+    python_requires='>=3.8',
 
     install_requires=read_requirements('requirements.txt'),
 
@@ -74,13 +76,10 @@ setup(
         "License :: MIT",
         'Natural Language :: Chinese',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Topic :: Software Development :: Libraries :: Python Modules',
-        'Topic :: Multimedia :: Sound/Audio',
         'Topic :: Multimedia :: Video',
-        'Topic :: Utilities'
     ],
 
     zip_safe=False
