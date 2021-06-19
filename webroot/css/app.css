@@ -1,0 +1,101 @@
+/*
+ *这是单独为hello mui准备的个性化css，可以覆盖标准mui的css定义；
+ * 在实际项目开发时，建议为App单独写一个css文件，从而实现项目的自定义皮肤功能；
+ * 
+ * */
+.mui-plus header.mui-bar{
+	display: none;
+}
+.mui-plus .mui-bar-nav~.mui-content{
+	padding: 0;
+}
+
+/*hm开头的表示仅为 Hello MUI示例定义*/
+.hm-description{
+	margin: .5em 0;
+}
+
+.hm-description>li {
+	font-size: 14px;
+	color: #8f8f94;
+}
+.flex-container {
+	display: -webkit-box;
+	display: -webkit-flex;
+	display: flex;
+	-webkit-flex-flow: row wrap;
+	justify-content: space-between;
+	text-align: center;
+	padding:5px
+}
+.flex-container button {
+	margin: 1px;
+	width: 50px;
+	height: 50px;
+	display: inline-block;
+	text-align: center;
+	background-color: #fff;
+	border: 1px solid #ddd;
+	border-radius: 25px;
+	background-clip: padding-box;
+	padding:11px
+}
+
+.flex-container button.main {
+	width: 75px;
+	height: 75px;
+	border-radius: 37.5px;
+	padding:22px
+}
+
+.flex-container button.play {
+	padding:16px 0px 16px 6px;
+}
+
+.flex-container button.stop {
+	padding:16px 0px;
+}
+.flex-container button.pause {
+	padding:16px 0px;
+}
+
+.flex-container button.main-line {
+	margin-top:15px;
+}
+
+.flex-container a {
+	color: #8F8F94;
+}
+.flex-container a.active {
+	color: #55aaff;
+}
+
+.head-img {
+	width: 40px;
+	height: 40px;
+}
+
+.circle-progress {width: 300px; height: 300px;}
+
+.circle-progress-text {
+	display: inline-block;
+	font: normal normal normal 14px/1 FontAwesome;
+	text-rendering: auto;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.circle-progress-value {
+	stroke-width: 8px;
+	stroke: #2980b9;
+}
+.circle-progress-circle {
+	stroke: white;
+	stroke-width: 8px;
+	fill: #2c3e50;
+	r: 46
+}
+.circle-progress-text {
+	font-size: 30px;
+	fill: #ecf0f1;
+}

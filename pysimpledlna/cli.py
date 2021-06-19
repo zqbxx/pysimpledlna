@@ -374,6 +374,14 @@ def playlist_play(args):
     player_model: PlayerModel = player.create_model()
     ac = ActionController(file_list, device, player_model)
 
+    from pysimpledlna.web import WebRoot, DLNAService
+    from pathlib import Path
+    web_root = WebRoot(ac, Path('./webroot'), 0)
+    dlna_service = DLNAService(ac)
+    dlna_server.app.route(**web_root.get_route_params())
+    dlna_server.app.route(**dlna_service.get_route_params())
+    player.webcontrol_url = web_root.get_player_page_url()
+
     def _item_checked(old_value, new_value):
         old_file_path = old_value[0]
         old_file_name = old_value[1]

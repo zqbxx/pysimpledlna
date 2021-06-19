@@ -32,7 +32,7 @@ import os
 
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window, ConditionalContainer, WindowAlign, Float
 from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, Button, MenuContainer, MenuItem
+from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, Button, MenuContainer, MenuItem, Frame
 from typing import Optional, Sequence, Tuple
 import logging
 
@@ -51,6 +51,7 @@ class PlayListPlayer(Progress):
                  color_depth: Optional[ColorDepth] = None,
                  output: Optional[Output] = None,
                  input: Optional[Input] = None,
+                 webcontrol_url: str=''
                  ) -> None:
 
         if formatters is None:
@@ -65,7 +66,6 @@ class PlayListPlayer(Progress):
 
         if bottom_toolbar is None:
             bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ')
-
 
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.bottom_part = None
@@ -98,6 +98,8 @@ class PlayListPlayer(Progress):
 
         self.event_queue = Queue()
         self.event_thread = None
+
+        self.webcontrol_url = webcontrol_url
 
     def is_accept_key_press(self):
         return (time.time() - self.last_key_press_time) > self.min_key_press_interval
@@ -138,6 +140,7 @@ class PlayListPlayer(Progress):
                     dont_extend_height=True,
                 ),
             ]),
+            Label(text=self.webcontrol_url, style="class:bottom-toolbar"),
             Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
         ])
 
