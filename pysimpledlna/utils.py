@@ -116,3 +116,18 @@ def get_free_tcp_port():
     return port
 
 
+def is_tcp_port_occupied(port: int):
+    tcp = None
+    try:
+        tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tcp.bind(('', port))
+        tcp.close()
+        return False
+    except:
+        return True
+    finally:
+        try:
+            if tcp is not None:
+                tcp.close()
+        except:
+            pass

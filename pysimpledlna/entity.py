@@ -158,7 +158,7 @@ class Settings:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        self.d: Dict[str, Union[str, bool]] = self.read()
+        self.d: Dict[str, Union[str, bool, int]] = self.read()
         self.original = self.d.copy()
         if 'default_device' not in self.d:
             self.d['default_device'] = ''
@@ -167,7 +167,9 @@ class Settings:
         if 'cert_file' not in self.d:
             self.d['cert_file'] = ''
         if 'key_file' not in self.d:
-            self.d['key_file']  = ''
+            self.d['key_file'] = ''
+        if 'default_port' not in self.d:
+            self.d['default_port'] = 18000
 
     def set_default_device(self, url: str):
         self.d['default_device'] = url
@@ -181,6 +183,9 @@ class Settings:
     def set_key_file(self, key_file: str):
         self.d['key_file'] = key_file
 
+    def set_default_port(self, default_port: int):
+        self.d['default_port'] = default_port
+
     def get_default_device(self) -> str:
         return self.d['default_device']
 
@@ -193,10 +198,13 @@ class Settings:
     def get_key_file(self):
         return self.d['key_file']
 
+    def get_default_port(self):
+        return self.d['default_port']
+
     def read(self) -> Dict[str, Union[str, bool]]:
         try:
             with open(self.file_path, 'r', encoding='utf-8-sig') as f:
-                d: Dict[str, Union[str, bool]] = json.load(f)
+                d: Dict[str, Union[str, bool, int]] = json.load(f)
                 return d
         except:
             return {}    # empty dict

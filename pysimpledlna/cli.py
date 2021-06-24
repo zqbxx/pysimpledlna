@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 import time
 import signal
 import logging
@@ -23,7 +24,7 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path)
+    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied)
 from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -79,6 +80,19 @@ def main():
 
     args = parser.parse_args()
     try:
+        default_port = settings.get_default_port()
+        try_cnt = 0
+        while is_tcp_port_occupied(default_port):
+            default_port += 1
+            if default_port > 18020:
+                default_port = default_port % 20 + 18000
+            try_cnt += 1
+            if try_cnt >= 20:
+                print('没有可用的端口：', default_port)
+                sys.exit()
+        settings.set_default_port(default_port)
+        settings.write()
+        _DLNA_SERVER.server_port = default_port
         _DLNA_SERVER.start_server()
         args.func(args)
     finally:
