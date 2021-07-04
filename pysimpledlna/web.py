@@ -1,7 +1,8 @@
 import json
+import time
 from pathlib import Path
 
-from bottle import request, static_file, abort
+from bottle import request, static_file, abort, HTTPResponse
 
 from pysimpledlna.ac import ActionController
 from pysimpledlna.dlna import DefaultResource
@@ -22,10 +23,21 @@ class WebRoot(DefaultResource):
         return protocol + '://' + dlna_server.server_ip + ':' + str(dlna_server.server_port) + '/s' + str(self.index) + '/player.html'
 
     def serve_static(self, filepath):
+
         if filepath == 'js/app.js':
+
             app_js_file = self.web_root / Path(filepath)
             app_js = app_js_file.read_text('utf-8')
-            return app_js.replace('{device_key}', self.ac.device.device_key)
+            app_js = app_js.replace('{device_key}', self.ac.device.device_key)
+            b_app_js = app_js.encode('utf-8')
+
+            headers = dict()
+            headers['Content-Encoding'] = 'utf-8'
+            headers['Content-Type'] = 'application/javascript'
+            headers['Content-Length'] = len(b_app_js)
+            headers["Accept-Ranges"] = "bytes"
+            headers["Last-Modified"] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+            return HTTPResponse(b_app_js, **headers)
 
         return static_file(filepath, root=str(self.web_root.absolute()))
 
