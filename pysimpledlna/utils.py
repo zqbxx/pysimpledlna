@@ -26,7 +26,7 @@ def is_in_nuitka() -> bool:
 def get_abs_path(rel_path=None) -> Path:
 
     if is_in_nuitka():
-        if rel_path is None:
+        if rel_path is not None:
             return Path(os.environ.get('nuitka_exe_dir')) / Path(rel_path)
         else:
             return Path(os.environ.get('nuitka_exe_dir'))

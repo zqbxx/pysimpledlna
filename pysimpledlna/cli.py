@@ -24,7 +24,7 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied)
+    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path)
 from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -390,7 +390,7 @@ def playlist_play(args):
 
     from pysimpledlna.web import WebRoot, DLNAService
     from pathlib import Path
-    web_root = WebRoot(ac, Path('./webroot'), 0)
+    web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
     dlna_service = DLNAService(ac)
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
