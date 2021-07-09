@@ -82,7 +82,7 @@ def main():
     try:
         default_port = settings.get_default_port()
         try_cnt = 0
-        while is_tcp_port_occupied(default_port):
+        while is_tcp_port_occupied(_DLNA_SERVER.server_ip, default_port):
             default_port += 1
             if default_port > 18020:
                 default_port = default_port % 20 + 18000
