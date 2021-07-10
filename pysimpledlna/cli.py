@@ -4,6 +4,7 @@ import sys
 import time
 import signal
 import logging
+from typing import List
 
 from pysimpledlna.ui.playlist import PlayListEditor
 
@@ -112,7 +113,7 @@ def wrap_parser_exit(parser: argparse.ArgumentParser):
 def create_default_device_parser(subparsers):
     command = 'config'
     parser = subparsers.add_parser(command, help='设置参数')
-    parser.add_argument('-u', '--url', dest='url', required=False, type=str, default=None, help='默认DLNA设备地址')
+    parser.add_argument('-u', '--url', dest='url', required=False, type=str, default=None, help='默认DLNA设备地址，多个地址用[;]分隔')
     parser.add_argument('-es', '--enable-ssl', dest='enable_ssl', required=False, type=str, default=None, choices=['True', 'true', 'False', 'false', ], help='是否启用SSL')
     parser.add_argument('-p', '--print', dest='print_opts', required=False, default=False, action='store_true', help='是否输出配置信息')
     parser.add_argument('-cert', '--cert-file', dest='cert_file', required=False, default=None, help='用于https的公钥')
@@ -226,7 +227,7 @@ def default(args):
     settings = Settings(setting_file_path)
 
     if args.url is not None:
-        settings.set_default_device(args.url)
+        settings.set_default_devices(args.url)
 
     if args.enable_ssl is not None:
         enable_ssl = (args.enable_ssl == 'True' or args.enable_ssl == 'true')
@@ -272,8 +273,11 @@ def play(args):
         url = args.url
         if url is None:
             settings = Settings(get_setting_file_path())
-            default_device_url = settings.get_default_device()
-            device = dlna_server.find_device(default_device_url)
+            default_device_urls: List[str] = settings.get_default_devices()
+            for default_device_url in default_device_urls:
+                device = dlna_server.find_device(default_device_url)
+                if device is not None:
+                    break
         else:
             device = dlna_server.parse_xml(url)
 
@@ -363,8 +367,11 @@ def playlist_play(args):
         if url is None:
             if url is None:
                 settings = Settings(get_setting_file_path())
-                default_device_url = settings.get_default_device()
-                device = dlna_server.find_device(default_device_url)
+                default_device_urls: List[str] = settings.get_default_devices()
+                for default_device_url in default_device_urls:
+                    device = dlna_server.find_device(default_device_url)
+                    if device is not None:
+                        break
         else:
             device = dlna_server.parse_xml(url)
     if device is None:

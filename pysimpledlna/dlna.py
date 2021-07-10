@@ -273,7 +273,9 @@ class SimpleDLNAServer():
         return device
 
     def find_device(self, location_url):
-        return self.register_device(self.parse_xml(location_url))
+        device = self.parse_xml(location_url)
+        self.register_device(device)
+        return device
 
     def send_dlna_action(self, data, device, action):
 

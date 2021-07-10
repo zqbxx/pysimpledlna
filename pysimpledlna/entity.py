@@ -158,10 +158,12 @@ class Settings:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        self.d: Dict[str, Union[str, bool, int]] = self.read()
+        self.d: Dict[str, Union[str, bool, int, List]] = self.read()
         self.original = self.d.copy()
         if 'default_device' not in self.d:
             self.d['default_device'] = ''
+        if 'default_devices' not in self.d:
+            self.d['default_devices'] = list()
         if 'enable_ssl' not in self.d:
             self.d['enable_ssl'] = False
         if 'cert_file' not in self.d:
@@ -173,6 +175,9 @@ class Settings:
 
     def set_default_device(self, url: str):
         self.d['default_device'] = url
+
+    def set_default_devices(self, url: str):
+        self.d['default_devices'] = [u.strip() for u in url.split(';') if len(u.strip()) > 0]
 
     def set_enable_ssl(self, enable_ssl:bool):
         self.d['enable_ssl'] = enable_ssl
@@ -188,6 +193,9 @@ class Settings:
 
     def get_default_device(self) -> str:
         return self.d['default_device']
+
+    def get_default_devices(self) -> List[str]:
+        return self.d['default_devices']
 
     def get_enable_ssl(self) -> bool:
         return self.d['enable_ssl']
