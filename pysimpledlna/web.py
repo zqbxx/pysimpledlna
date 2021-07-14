@@ -6,6 +6,7 @@ from bottle import request, static_file, abort, HTTPResponse
 
 from pysimpledlna.ac import ActionController
 from pysimpledlna.dlna import DefaultResource
+from pysimpledlna.utils import format_time
 
 
 class WebRoot(DefaultResource):
@@ -26,20 +27,39 @@ class WebRoot(DefaultResource):
 
         if filepath == 'js/app.js':
 
-            app_js_file = self.web_root / Path(filepath)
-            app_js = app_js_file.read_text('utf-8')
-            app_js = app_js.replace('{device_key}', self.ac.device.device_key)
-            b_app_js = app_js.encode('utf-8')
+            return self.dynamic_content(filepath=filepath,
+                                   content_type='application/javascript',
+                                   data_map={'{device_key}': self.ac.device.device_key},
+                                   encoding='utf-8')
 
-            headers = dict()
-            headers['Content-Encoding'] = 'utf-8'
-            headers['Content-Type'] = 'application/javascript'
-            headers['Content-Length'] = len(b_app_js)
-            headers["Accept-Ranges"] = "bytes"
-            headers["Last-Modified"] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-            return HTTPResponse(b_app_js, **headers)
+        elif filepath == 'player.html':
+            return self.dynamic_content(filepath=filepath,
+                                   content_type='text/html',
+                                   data_map={'{randomstr}': str(time.time())},
+                                   encoding='utf-8')
 
-        return static_file(filepath, root=str(self.web_root.absolute()))
+        if not filepath.endswith('.mp4') or not filepath.endswith('.webm') :
+            response = static_file(filepath, root=str(self.web_root.absolute()))
+            response['Last-Modified'] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+
+        return response
+
+    def dynamic_content(self, filepath, content_type, data_map, encoding='utf-8'):
+        dynamic_file = self.web_root / Path(filepath)
+        dynamic_file_content = dynamic_file.read_text(encoding)
+        replaced_content = dynamic_file_content
+        for k, v in data_map.items():
+            replaced_content = replaced_content.replace(k, v)
+        replaced_bytes = replaced_content.encode(encoding)
+
+        headers = dict()
+        headers['Content-Encoding'] = encoding
+        headers['Content-Type'] = content_type
+        headers['Content-Length'] = len(replaced_bytes)
+        headers["Accept-Ranges"] = "bytes"
+        headers["Last-Modified"] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+        return HTTPResponse(replaced_bytes, **headers)
+
 
 
 class DLNAService(DefaultResource):
@@ -55,12 +75,19 @@ class DLNAService(DefaultResource):
             return self.get_dlna_status().encode('utf-8')
         elif request_command == 'pause':
             self.ac.device.pause()
+            return ''
         elif request_command == 'play':
             self.ac.device.play()
+            return ''
         elif request_command == 'index':
             index = int(request.params.get('index'))
             self.ac.current_idx = index
             self.ac.play()
+            return ''
+        elif request_command == 'seek':
+            pos = int(request.params.get('pos'))
+            self.ac.device.seek(format_time(pos + self.ac.current_video_position))
+            return ''
         abort(404, "错误的命令")
 
     def get_dlna_status(self):
