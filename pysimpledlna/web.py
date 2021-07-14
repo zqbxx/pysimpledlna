@@ -28,15 +28,15 @@ class WebRoot(DefaultResource):
         if filepath == 'js/app.js':
 
             return self.dynamic_content(filepath=filepath,
-                                   content_type='application/javascript',
-                                   data_map={'{device_key}': self.ac.device.device_key},
-                                   encoding='utf-8')
+                                        content_type='application/javascript',
+                                        data_map={'{device_key}': self.ac.device.device_key},
+                                        encoding='utf-8')
 
         elif filepath == 'player.html':
             return self.dynamic_content(filepath=filepath,
-                                   content_type='text/html',
-                                   data_map={'{randomstr}': str(time.time())},
-                                   encoding='utf-8')
+                                        content_type='text/html',
+                                        data_map={'{randomstr}': str(time.time())},
+                                        encoding='utf-8')
 
         if not filepath.endswith('.mp4') or not filepath.endswith('.webm') :
             response = static_file(filepath, root=str(self.web_root.absolute()))
