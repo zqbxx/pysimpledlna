@@ -9,4 +9,5 @@ mkdir -p $output_dir/pysimpledlna.dist/pysimpledlna/templates
 cp -R ./pysimpledlna/templates $output_dir/pysimpledlna.dist/pysimpledlna
 cp ./bottle.*.pyd $output_dir/pysimpledlna.dist/
 cp ./prompt_toolkit.*.pyd $output_dir/pysimpledlna.dist/
+cp -R -u ../webroot $output_dir/pysimpledlna.dist/
 rm -rf $output_dir/pysimpledlna.build
