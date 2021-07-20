@@ -26,7 +26,8 @@
 	-webkit-flex-flow: row wrap;
 	justify-content: space-between;
 	text-align: center;
-	width:100%
+	width:100%;
+	margin-bottom:5px;
 }
 .flex-container button {
 	margin: 1px;

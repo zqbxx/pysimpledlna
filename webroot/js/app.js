@@ -177,7 +177,6 @@ mui.ready(function() {
 	progressBar.max = videoDuration;
 	progressBar.addEventListener('mousedown', rangeSeekStartFunc);
 	progressBar.addEventListener('touchstart', rangeSeekStartFunc);
-	progressBar.addEventListener('change', rangeSeekFunc);
 	progressBar.addEventListener('input', rangeSeekFunc);
 	progressBar.addEventListener('mouseup', rangeSeekEndFunc);
 	progressBar.addEventListener('touchend', rangeSeekEndFunc);
