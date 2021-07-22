@@ -82,6 +82,7 @@ class PlayListPlayer(Progress):
             'focus_playlist': KeyEvent('n'),
             'focus_controller': KeyEvent('m'),
         }
+        self.player_events['quit'].threads = 1
 
         self.controller_events = {
             'forward': KeyEvent('right'),
@@ -171,10 +172,12 @@ class PlayListPlayer(Progress):
 
         @player_kb.add(self.player_events['quit'].key)
         def _(event):
-            self.exit()
-            for model in self.models:
-                model.player_status = PlayerStatus.STOP
-            self.player_events['quit'].fire(event)
+            try:
+                self.player_events['quit'].fire(event)
+            finally:
+                for model in self.models:
+                    model.player_status = PlayerStatus.STOP
+                self.exit()
 
         @player_kb.add(self.player_events['focus_playlist'].key)
         def _(event):

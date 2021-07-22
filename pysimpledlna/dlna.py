@@ -742,7 +742,6 @@ class DlnaDeviceSyncThread(EasyThread):
         if func is None:
             return
         try:
-            #if old_value is None or old_value != new_value:
             func(type, old_value, new_value)
         except:
             traceback.print_exc()
@@ -787,8 +786,8 @@ class DlnaDeviceSyncThread(EasyThread):
         logger.debug('-------start-------------')
 
         if self.last_status is None:
-            self.call_hook(transportstatehook, 'CurrentTransportState', None, transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackURI', None, position_info['TrackURI'])
+            self.call_hook(transportstatehook, 'CurrentTransportState', None, transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackDurationInSeconds', None, position_info['TrackDurationInSeconds'])
             self.call_hook(positionhook, 'RelTimeInSeconds', None, position_info['RelTimeInSeconds'])
         else:
@@ -798,10 +797,10 @@ class DlnaDeviceSyncThread(EasyThread):
             if last_position_info['TrackURI'] is None and position_info['TrackURI'] is not None or position_info['TrackURI'] != last_position_info['TrackURI']:
                 self.count = 0
 
-            self.call_hook(transportstatehook, 'CurrentTransportState'
-                           , last_transport_info['CurrentTransportState'], transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackURI'
                            , last_position_info['TrackURI'], position_info['TrackURI'])
+            self.call_hook(transportstatehook, 'CurrentTransportState'
+                           , last_transport_info['CurrentTransportState'], transport_info['CurrentTransportState'])
             self.call_hook(positionhook, 'TrackDurationInSeconds'
                            , last_position_info['TrackDurationInSeconds'], position_info['TrackDurationInSeconds'])
             self.call_hook(positionhook, 'RelTimeInSeconds'

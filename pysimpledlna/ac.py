@@ -3,6 +3,7 @@ import os
 import signal
 import time
 from pathlib import Path
+from typing import List
 
 from pysimpledlna import Device
 from pysimpledlna.ui.terminal import Player, PlayerStatus
@@ -21,13 +22,16 @@ class ActionController:
     '''
     自己实现连续播放多个文件的功能，部分DLNA设备没有实现用于连续播放的接口
     '''
-    def __init__(self, file_list, device: Device, player=Player()):
+    def __init__(self, file_list: List[str], device: Device, player=Player()):
         self.current_idx = 0
-        self.file_list = file_list
+        self.file_list: List[str] = file_list
         self.device = device
 
         self.current_video_position = 0
         self.current_video_duration = 0
+
+        self.server_file_path = ''  #: 当前正在投屏的文件地址
+        self.is_occupied = False  #: 投屏是否被其他程序占用
 
         self.player = player
 
@@ -37,6 +41,7 @@ class ActionController:
             'play_next': Event(),
             'play_last': Event(),
             'play': Event(),
+            'stop': Event(),
             'video_position': Event(),
         }
 
@@ -57,11 +62,16 @@ class ActionController:
         logger.debug('type: ' + type + ' old:' + str(old_value) + ' new:' + str(new_value))
         self.player.exception = None
         if type == 'CurrentTransportState':
+            if self.is_occupied:
+                return
             logger.debug('try play next video:')
             logger.debug('current_video_position:' + str(self.current_video_position))
             logger.debug('current_video_duration:' + str(self.current_video_duration))
 
             if new_value == 'STOPPED':
+                if self.player.player_status != PlayerStatus.STOP:
+                    self.player.player_status = PlayerStatus.STOP
+                    self.events['stop'].fire(self.current_idx, self.current_video_position)
                 self.player.player_status = PlayerStatus.STOP
             elif new_value == 'PLAYING':
                 self.player.player_status = PlayerStatus.PLAY
@@ -80,14 +90,31 @@ class ActionController:
                         self.stop_device()
                         os.kill(signal.CTRL_C_EVENT, 0)
 
-                else:
-                    self.stop_device()
-                    os.kill(signal.CTRL_C_EVENT, 0)
+                #else:
+                #    self.stop_device()
+                #    os.kill(signal.CTRL_C_EVENT, 0)
+        elif type == 'TrackURI':
+            if not (self.server_file_path == old_value or self.server_file_path == new_value) and self.server_file_path != '':
+                self.is_occupied = True
+                # 其他设备进行投屏，本机设置为停止
+                if self.player.player_status != PlayerStatus.STOP:
+                    self.player.player_status = PlayerStatus.STOP
+                    self.events['stop'].fire(self.current_idx, self.current_video_position)
+            else:
+                self.is_occupied = False
 
         elif type == 'TrackDurationInSeconds':
+            if self.is_occupied:
+                return
+            if self.player.player_status == PlayerStatus.STOP:
+                return
             self.current_video_duration = new_value
             self.player.duration = new_value
         elif type == 'RelTimeInSeconds':
+            if self.is_occupied:
+                return
+            if self.player.player_status == PlayerStatus.STOP:
+                return
             if self.current_video_position != new_value:
                 self.events['video_position'].fire(self.current_video_position, new_value)
             self.current_video_position = new_value
@@ -124,11 +151,11 @@ class ActionController:
         self.player.cur_pos = 0
         self.current_video_position = 0
         self.current_video_duration = 0
-        server_file_path = self.device.add_file(file_path)
+        self.server_file_path = self.device.add_file(file_path)
 
         try:
             self.device.stop()
-            self.device.set_AV_transport_URI(server_file_path)
+            self.device.set_AV_transport_URI(self.server_file_path)
             self.device.play()
             self.player.player_status = PlayerStatus.PLAY
             self.ensure_player_is_playing()

@@ -380,6 +380,8 @@ def playlist_play(args):
 
     dlna_server.register_device(device)
 
+    # 初始化播放列表
+    position_in_playlist = dict()
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
@@ -388,13 +390,23 @@ def playlist_play(args):
     play_list = Playlist(play_list_file)
     play_list.load_playlist()
     file_list = play_list.file_list
-    playlist_values = [(f, os.path.split(f)[1]) for f in file_list]
-    playlist_contents = RadioList(values=playlist_values)
-
+    #playlist_values = [(f, os.path.split(f)[1]) for f in file_list]
+    playlist_contents = RadioList(values=[('', '')])
     player = PlayListPlayer(playlist_contents)
     player_model: PlayerModel = player.create_model()
-    ac = ActionController(file_list, device, player_model)
+    ac = ActionController(play_list.file_list, device, player_model)
 
+    def setup_playlist(new_play_list):
+        playlist_contents.values = [(f, os.path.split(f)[1]) for f in new_play_list.file_list]
+        ac.file_list = new_play_list.file_list
+        ac.current_idx = new_play_list.current_index
+        position_in_playlist['current_pos'] = new_play_list.current_pos
+        position_in_playlist['current_index'] = new_play_list.current_index
+        playlist_contents.set_checked_index(new_play_list.current_index)
+
+    setup_playlist(play_list)
+
+    # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
     from pathlib import Path
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
@@ -402,7 +414,10 @@ def playlist_play(args):
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
     player.webcontrol_url = web_root.get_player_page_url()
+    player.create_key_bindings()
+    player.create_ui()
 
+    # 事件处理
     def _item_checked(old_value, new_value):
         old_file_path = old_value[0]
         old_file_name = old_value[1]
@@ -410,13 +425,18 @@ def playlist_play(args):
         new_file_path = new_value[0]
         new_file_name = new_value[1]
 
-        if os.path.samefile(old_file_path, new_file_path):
+        if os.path.samefile(old_file_path, new_file_path) and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] :
             return True
 
-        selected_index = playlist_contents.get_selected_index()
+        if not os.path.samefile(old_file_path, new_file_path):
+            selected_index = playlist_contents.get_selected_index()
 
-        ac.current_idx = selected_index
-        ac.play()
+            ac.current_idx = selected_index
+            ac.play()
+        else:
+            play_list.load_playlist()
+            setup_playlist(play_list)
+            ac.play()
 
     def _update_list_ui(current_index):
         playlist_contents.current_value = playlist_contents.values[current_index][0]
@@ -460,31 +480,10 @@ def playlist_play(args):
         play_list.current_pos = n_position
         play_list.save_playlist()
 
-    playlist_contents.check_event += _item_checked
-
-    player.create_key_bindings()
-    player.create_ui()
-
-    player.player_events['quit'] += lambda e: ac.stop_device()
-    player.controller_events['pause'] += \
-        lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
-    player.controller_events['last'] += _last
-    player.controller_events['next'] += _next
-    player.controller_events['forward'] += _forward
-    player.controller_events['backward'] += _backward
-
-    ac.events['play'] += _update_list_ui
-    ac.events['play'] += _update_playlist_index
-    ac.events['video_position'] += _update_playlist_video_position
-
-    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
-    device.start_sync_remote_player_status()
-
-    playlist_contents.set_checked_index(play_list.current_index)
-    ac.current_idx = play_list.current_index
-    position_in_playlist = dict()
-    position_in_playlist['current_pos'] = play_list.current_pos
-    position_in_playlist['current_index'] = play_list.current_index
+    def _save_playlist(current_index, current_position):
+        play_list.current_index = current_index
+        play_list.current_pos = current_position
+        play_list.save_playlist(force=True)
 
     def _skip_head(current_index):
         
@@ -509,8 +508,6 @@ def playlist_play(args):
             play_list.current_pos = play_list.skip_head
             play_list.save_playlist(force=True)
 
-    ac.events['play'] += _skip_head
-
     def _skip_tail(o_position, n_position):
         if play_list.skip_tail == 0:
             return
@@ -518,7 +515,35 @@ def playlist_play(args):
         if n_position >= end and end > 0:
             ac.play_next()
 
+    def _quit():
+        if ac.is_occupied:
+            ac.device.stop_sync_remote_player_status()
+            # 其他程序占用投屏时，退出时不发送结束投屏命令
+            #ac.device.stop()
+            ac.end = True
+        else:
+            ac.stop_device()
+
+    # 加入事件监听
+    playlist_contents.check_event += _item_checked
+    # TODO 事件没有被调用，待查
+    player.player_events['quit'] += _quit
+    player.controller_events['pause'] += \
+        lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
+    player.controller_events['last'] += _last
+    player.controller_events['next'] += _next
+    player.controller_events['forward'] += _forward
+    player.controller_events['backward'] += _backward
+    ac.events['play'] += _skip_head
     ac.events['video_position'] += _skip_tail
+    ac.events['play'] += _update_list_ui
+    ac.events['play'] += _update_playlist_index
+    ac.events['video_position'] += _update_playlist_video_position
+    ac.events['stop'] += _save_playlist
+    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
+
+    # 开始同步状态
+    device.start_sync_remote_player_status()
 
     with patch_stdout():
         ac.play()
@@ -533,8 +558,8 @@ def playlist_play(args):
                 time.sleep(0.5)
 
         finally:
-            device.stop_sync_remote_player_status()
-            dlna_server.stop_server()
+            # 事件无法触发，暂时在这里调用
+            _quit()
             player.clear()
 
 
