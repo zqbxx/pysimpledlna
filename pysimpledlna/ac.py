@@ -29,8 +29,12 @@ class ActionController:
 
         self.current_video_position = 0
         self.current_video_duration = 0
+        self.last_video_duration = -1
+        self.last_video_position = -1
+        self.last_idx = 0
 
-        self.server_file_path = ''  #: 当前正在投屏的文件地址
+        self.local_file_path = ''  #: 当前正在投屏的文件本地地址
+        self.server_file_path = ''  #: 当前正在投屏的文件服务器地址
         self.is_occupied = False  #: 投屏是否被其他程序占用
 
         self.player = player
@@ -99,7 +103,14 @@ class ActionController:
                 # 其他设备进行投屏，本机设置为停止
                 if self.player.player_status != PlayerStatus.STOP:
                     self.player.player_status = PlayerStatus.STOP
+                    self.current_idx = self.last_idx
+                    # 使用上一个视频的位置和时长，避免nuitka编译后导致的问题
+                    self.current_video_position = self.last_video_position
+                    self.current_video_duration = self.last_video_duration
+                    self.player.cur_pos = self.current_video_position
                     self.events['stop'].fire(self.current_idx, self.current_video_position)
+                    self.last_video_duration = -1
+                    self.last_video_position = -1
             else:
                 self.is_occupied = False
 
@@ -108,6 +119,12 @@ class ActionController:
                 return
             if self.player.player_status == PlayerStatus.STOP:
                 return
+            # 记录上一个视频的长度
+            # nuitka编译后TrackURI, TrackDurationInSeconds, RelTimeInSeconds调用顺序改变导致
+            # 其他程序占用dlna播放器后先更新视频长度和位置信息
+            # 造成播放列表保存播放为位置错误
+            if self.last_video_duration != self.current_video_duration:
+                self.last_video_duration = self.current_video_duration
             self.current_video_duration = new_value
             self.player.duration = new_value
         elif type == 'RelTimeInSeconds':
@@ -117,6 +134,13 @@ class ActionController:
                 return
             if self.current_video_position != new_value:
                 self.events['video_position'].fire(self.current_video_position, new_value)
+            # 记录上一次轮询位置，仅记录大于10秒的位置
+            # nuitka编译后TrackURI, TrackDurationInSeconds, RelTimeInSeconds调用顺序改变导致
+            # 其他程序占用dlna播放器后先更新视频长度和位置信息
+            # 造成播放列表保存播放为位置错误
+            if self.current_video_position > 10:
+                self.last_video_position = self.current_video_position
+                self.last_idx = self.current_idx
             self.current_video_position = new_value
             self.player.cur_pos = new_value
         elif type == 'UpdatePositionEnd':
@@ -145,13 +169,13 @@ class ActionController:
 
         self.player.new_player()
 
-        file_path = self.file_list[self.current_idx]
-        self.player.video_file = file_path
+        self.local_file_path = self.file_list[self.current_idx]
+        self.player.video_file = self.local_file_path
         self.player.duration = 0
         self.player.cur_pos = 0
         self.current_video_position = 0
         self.current_video_duration = 0
-        self.server_file_path = self.device.add_file(file_path)
+        self.server_file_path = self.device.add_file(self.local_file_path)
 
         try:
             self.device.stop()
