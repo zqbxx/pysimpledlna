@@ -16,9 +16,9 @@ mui.ready(function() {
         .attr('animationDuration', 0)
         .attr('textFormat', function(value, max) {
             if(currentStatus == 'Play') {
-                return '&#xf04b'
-			} else {
-				return "&#xf04c";
+                return '&#xf04c';
+			} else if (currentStatus == 'Pause') {
+				return '&#xf04b';
 			}
 		});
 
@@ -39,24 +39,6 @@ mui.ready(function() {
 
 	})
 
-
-/*
-	mui('#video-progress-bar').progressbar().setProgress(50)
-
-	mui(".flex-container").on('click', '#btn-play', function(){
-		if(this.querySelector("span").classList.contains('fa-play')){
-			this.querySelector("span").classList.remove('fa-play')
-			this.querySelector("span").classList.add('fa-pause')
-			this.classList.remove('play')
-			this.classList.add('pause')
-		} else {
-			this.querySelector("span").classList.add('fa-play')
-			this.querySelector("span").classList.remove('fa-pause')
-			this.classList.remove('pause')
-			this.classList.add('play')
-		}
-	})
-	*/
 	var showUserPickerButton = document.getElementById('select-video');
 	showUserPickerButton.addEventListener('tap', function(event) {
 		userPicker.pickers[0].setSelectedIndex(currentSelectedIndex, 1000)
@@ -73,36 +55,18 @@ mui.ready(function() {
 		});
 	}, false);
 
+    //屏幕常亮
     var lightVideo = document.getElementById('light');
     var lightHandle = document.getElementById('light-handle');
+    var noSleep = new NoSleep();
 
-	/*lightVideo.addEventListener('ended', function(){
-		if (lightVideo.classList.contains('mui-switch')) {
-			lightVideo.play();
-		} else {
-			lightVideo.stop();
-		}
-	});*/
-
-
-    //屏幕常亮
 	lightHandle.addEventListener('toggle', function(event) {
 	    if (event.detail.isActive) {
-	        lightVideo.play();
+	        noSleep.enable()
 	    } else {
-	        lightVideo.pause();
+	        noSleep.disable();
 	    }
 	});
-
-    function light(){
-        lightVideo.play();
-        document.getElementById('light-handle').classList.remove('mui-active')
-    }
-
-    function nolight() {
-        lightVideo.stop();
-        document.getElementById('light-handle').classList.add('mui-active')
-    }
 
 
     //进度跳转
