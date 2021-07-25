@@ -1,8 +1,11 @@
 import threading
 import time
+from asyncio import Future
+from pathlib import Path
 from queue import Queue, Empty
 
 from prompt_toolkit import Application
+from prompt_toolkit.application import get_app
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.input import Input
 from prompt_toolkit.key_binding import KeyBindings
@@ -17,6 +20,7 @@ from prompt_toolkit.formatted_text import (
 )
 from typing import TextIO, List
 
+from prompt_toolkit.shortcuts import radiolist_dialog
 from prompt_toolkit.styles import BaseStyle, Style
 
 from prompt_toolkit_ext.progress import ProgressModel, Progress
@@ -42,6 +46,7 @@ class PlayListPlayer(Progress):
 
     def __init__(self,
                  playlist_part: RadioList,
+                 playlistlist_part: RadioList,
                  top_text: Tuple[str] = None,
                  title: AnyFormattedText = None,
                  formatters: Optional[Sequence[Formatter]] = None,
@@ -65,7 +70,7 @@ class PlayListPlayer(Progress):
             ]
 
         if bottom_toolbar is None:
-            bottom_toolbar = HTML('<b> [q] </b>退出<b> [p] </b>暂停<b> [n] </b>播放列表<b> [m] </b>进度条 ')
+            bottom_toolbar = HTML('<b>[q]</b>退出<b>[p]</b>暂停<b>[b]</b>选择播放列表<b>[n]</b>选择文件<b>[m]</b>进度控制')
 
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.bottom_part = None
@@ -75,10 +80,12 @@ class PlayListPlayer(Progress):
         self.player_controls_keybindings = None
         self.player_controls_cp = None
         self.playlist_part: RadioList = playlist_part
+        self.playlistlist_part: RadioList = playlistlist_part
         self.top_text: Tuple[str] = top_text
 
         self.player_events = {
             'quit': KeyEvent('q'),
+            'focus_playlistlist': KeyEvent('b'),
             'focus_playlist': KeyEvent('n'),
             'focus_controller': KeyEvent('m'),
         }
@@ -120,7 +127,13 @@ class PlayListPlayer(Progress):
 
     def create_content(self, progress_controls):
 
-        self.progress_controls_part = super().create_content(progress_controls)
+        self.progress_controls_part = VSplit(
+            progress_controls,
+            height=lambda: D(
+                preferred=len(self.models), max=len(self.models)
+            ),
+            width=Dimension()
+        )
         self.player_controls_cp = FormattedTextControl(
                 ' ',
                 key_bindings=self.player_controls_keybindings,
@@ -128,37 +141,57 @@ class PlayListPlayer(Progress):
             )
 
         self.player_controls_part = HSplit([
-            VSplit([
-                Label(text="[PgUp] 上一个"),
-                Label(text="[<-] 后退"),
-                Label(text="[p] 暂停/播放"),
-                Label(text="[->] 前进"),
-                Label(text="[PgDn] 下一个"),
-                Window(
-                    self.player_controls_cp,
-                    height=1,
-                    dont_extend_width=True,
-                    dont_extend_height=True,
-                ),
-            ]),
-            Label(text=self.webcontrol_url, style="class:bottom-toolbar"),
-            Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
-        ])
+                VSplit([
+                    Label(text="[PgUp] 上一个"),
+                    Label(text="[<-] 后退"),
+                    Label(text="[p] 暂停/播放"),
+                    Label(text="[->] 前进"),
+                    Label(text="[PgDn] 下一个"),
+                    Window(
+                        self.player_controls_cp,
+                        height=1,
+                        dont_extend_width=True,
+                        dont_extend_height=True,
+                    ),
+                ]),
+                Label(text=self.webcontrol_url, style="class:bottom-toolbar"),
+                Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
+            ])
 
-        self.top_part = HSplit([
+        self.top_part = Frame(
+            title="进度条",
+            width=Dimension(),
+            body=HSplit([
             self.progress_controls_part,
             Window(height=1, char="-", style="class:line"),
             self.player_controls_part,
-        ])
+        ]))
 
-        self.bottom_part = Box(self.playlist_part, height=Dimension(), width=Dimension())
-
+        #self.bottom_part = Box(self.playlist_part, height=Dimension(), width=Dimension())
+        self.bottom_part = Frame(
+            title="视频文件",
+            body=Box(self.playlist_part, height=Dimension(), width=Dimension()),
+            height=Dimension(),
+            width=Dimension()
+        )
         parts = []
         if self.top_text is not None:
             parts.append(Window(FormattedTextControl(self.top_text),
                                 height=len(self.top_text), style="reverse"))
-        parts.append(HSplit([self.top_part, Window(height=1, char="-"), self.bottom_part], width=Dimension()))
-        body = VSplit(parts)
+        parts.append(HSplit([self.top_part,
+                             #Window(height=1, char="-"),
+                             self.bottom_part],
+                            width=Dimension()))
+        body = VSplit([
+            Frame(
+                title="播放列表",
+                body=Box(self.playlistlist_part, height=Dimension(), width=Dimension()),
+                width=30,
+                height=Dimension()
+            ),
+            #Window(width=1, char="|", style="class:line"),
+            VSplit(parts),
+        ])
         return body
 
     def create_ui(self):
@@ -188,6 +221,11 @@ class PlayListPlayer(Progress):
         def _(event):
             self.app.layout.focus(self.player_controls_cp)
             self.player_events['focus_controller'].fire(event)
+
+        @player_kb.add(self.player_events['focus_playlistlist'].key)
+        def _(event):
+            self.app.layout.focus(self.playlistlist_part)
+            self.player_events['focus_playlistlist'].fire(event)
 
         self.key_bindings = player_kb
 
@@ -509,7 +547,7 @@ class VideoFileFormatter(VideoBaseFormatter):
         )
 
     def get_render_text(self, player: "PlayerModel"):
-        return player.video_file
+        return Path(player.video_file).name
 
 
 class PlayListEditor:

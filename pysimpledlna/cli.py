@@ -4,7 +4,7 @@ import sys
 import time
 import signal
 import logging
-from typing import List
+from typing import List, Tuple
 
 from pysimpledlna.ui.playlist import PlayListEditor
 
@@ -356,6 +356,8 @@ def playlist_play(args):
     from prompt_toolkit import HTML
 
     dlna_server = _DLNA_SERVER
+    user_dir = get_user_data_dir()
+    play_list_dir = get_playlist_dir(user_dir, 'playlist')
 
     device: Device = None
     if args.auto_selected:
@@ -380,6 +382,10 @@ def playlist_play(args):
 
     dlna_server.register_device(device)
 
+    playlist_contents = RadioList(values=[('', '')])
+    playlist_list_contents = RadioList(values=[('', '')])
+    player = PlayListPlayer(playlist_contents, playlist_list_contents)
+
     # 初始化播放列表
     position_in_playlist = dict()
     play_list_file = get_playlist_file_path(args)
@@ -389,10 +395,7 @@ def playlist_play(args):
 
     play_list = Playlist(play_list_file)
     play_list.load_playlist()
-    file_list = play_list.file_list
-    #playlist_values = [(f, os.path.split(f)[1]) for f in file_list]
-    playlist_contents = RadioList(values=[('', '')])
-    player = PlayListPlayer(playlist_contents)
+
     player_model: PlayerModel = player.create_model()
     ac = ActionController(play_list.file_list, device, player_model)
 
@@ -406,6 +409,60 @@ def playlist_play(args):
 
     setup_playlist(play_list)
 
+    # 初始化播放列表的列表
+    def _get_playlist_list() -> List[Tuple[str, str]]:
+        playlist_list_dir = get_playlist_dir(user_dir, 'playlist')
+        playlist_list = [(os.path.join(playlist_list_dir, f), os.path.splitext(f)[0]) for f in
+                         os.listdir(playlist_list_dir) if
+                         os.path.isfile(os.path.join(playlist_list_dir, f)) and f.endswith('.playlist')]
+        return playlist_list
+
+    def _get_playlist_filename_by_name(playlist_name):
+        _play_list_file = get_playlist_file_path_by_name(play_list_dir, playlist_name)
+        _play_list = Playlist(_play_list_file)
+        _play_list.load_playlist()
+        return _play_list
+
+    def _playlist_selected(old_value, new_value):
+        old_file_path = old_value[0]
+        old_file_name = old_value[1]
+
+        new_file_path = new_value[0]
+        new_file_name = new_value[1]
+
+        def samefile(old_file_path, new_file_path):
+            o_exists = os.path.exists(old_file_path)
+            n_exists = os.path.exists(new_file_path)
+            if not o_exists and n_exists:
+                return False
+            if not o_exists and not n_exists:
+                return True
+            if o_exists and not n_exists:
+                return False
+            return os.path.samefile(old_file_path, new_file_path)
+
+
+        if samefile(old_file_path, new_file_path):
+            return
+
+        play_list.save_playlist(force=True)
+        play_list.file_path = new_file_path
+        play_list.clear()
+        play_list.load_playlist()
+        setup_playlist(play_list)
+        return play_list
+
+    playlist_list = _get_playlist_list()
+
+    playlist_list_contents.values = playlist_list
+    for index, playlist in enumerate(playlist_list):
+        playlist_name = playlist[1]
+        if playlist_name == args.name:
+            playlist_list_contents.set_checked_index(index)
+            break
+
+    playlist_list_contents.get_selected_item()
+
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
     from pathlib import Path
@@ -418,17 +475,20 @@ def playlist_play(args):
     player.create_ui()
 
     # 事件处理
-    def _item_checked(old_value, new_value):
+    def _video_selected(old_value, new_value):
         old_file_path = old_value[0]
         old_file_name = old_value[1]
 
         new_file_path = new_value[0]
         new_file_name = new_value[1]
 
-        if os.path.samefile(old_file_path, new_file_path) and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] :
+        if os.path.samefile(old_file_path, new_file_path) \
+                and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] \
+                and os.path.samefile(new_file_path, ac.local_file_path) :
             return True
 
-        if not os.path.samefile(old_file_path, new_file_path):
+        if not os.path.samefile(old_file_path, new_file_path) \
+                or not os.path.samefile(new_file_path, ac.local_file_path):
             selected_index = playlist_contents.get_selected_index()
 
             ac.current_idx = selected_index
@@ -525,7 +585,8 @@ def playlist_play(args):
             ac.stop_device()
 
     # 加入事件监听
-    playlist_contents.check_event += _item_checked
+    playlist_contents.check_event += _video_selected
+    playlist_list_contents.check_event += _playlist_selected
     # TODO 事件没有被调用，待查
     player.player_events['quit'] += _quit
     player.controller_events['pause'] += \
@@ -614,6 +675,11 @@ def get_playlist_file_path(args):
     user_dir = get_user_data_dir()
     play_list_dir = get_playlist_dir(user_dir, 'playlist')
     play_list_name = args.name
+    play_list_file = os.path.join(play_list_dir, play_list_name + '.playlist')
+    return play_list_file
+
+
+def get_playlist_file_path_by_name(play_list_dir, play_list_name):
     play_list_file = os.path.join(play_list_dir, play_list_name + '.playlist')
     return play_list_file
 

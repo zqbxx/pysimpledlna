@@ -22,6 +22,17 @@ class Playlist:
         self._filter = filter
         self._input = input
 
+    def clear(self):
+        self._current_index = 0
+        self._current_file_path = None
+        self._current_pos = 0
+        self._file_list = []
+        self._skip_head = 0
+        self._skip_tail = 0
+        self._filter = '*'
+
+        self.last_save = 0
+
     def filter_files(self):
 
         self._file_list.clear()
@@ -37,6 +48,7 @@ class Playlist:
             self._file_list += [ str(fpath) for fpath in input_dir_path.glob(filter_str) if fpath.is_file()]
 
     def load_playlist(self):
+        self.clear()
         if not os.path.isfile(self.file_path):
             return
         jo = None
@@ -87,7 +99,6 @@ class Playlist:
             self.last_save = current
 
     def refresh_playlist(self):
-
         if self._input is None:
             return
 
