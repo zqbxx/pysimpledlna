@@ -7,7 +7,7 @@ from typing import List
 
 from pysimpledlna import Device
 from pysimpledlna.ui.terminal import Player, PlayerStatus
-from pysimpledlna.utils import wait_interval
+from pysimpledlna.utils import wait_interval, format_time
 from prompt_toolkit_ext.event import Event
 
 import traceback
@@ -189,6 +189,24 @@ class ActionController:
         finally:
             self.events['play'].fire(self.current_idx)
             self.enable_hook = True
+
+    def resume(self):
+        time_str = format_time(self.current_video_position)
+        self.device.stop()
+        self.device.set_AV_transport_URI(self.server_file_path)
+        self.device.play()
+        self.player.player_status = PlayerStatus.PLAY
+        self.ensure_player_is_playing()
+        self.device.seek(time_str)
+        # 强制下一次轮询时强制更新
+        if self.device.sync_thread is not None:
+            self.device.sync_thread.last_status = None
+
+    def stop(self):
+        if self.player.player_status != PlayerStatus.STOP:
+            self.player.player_status = PlayerStatus.STOP
+            self.events['stop'].fire(self.current_idx, self.current_video_position)
+            self.device.stop()
 
     def validate_current_index(self):
         logger.debug(f'current_index: {self.current_idx}')

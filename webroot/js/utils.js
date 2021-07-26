@@ -27,3 +27,13 @@ function formatTime(timeInSecond) {
     m = m % 60;
     return padLeft(h, 2) + ":" + padLeft(m, 2) + ":" + padLeft(s, 2);
 }
+
+function hasClass(element, className) {
+    for ( let i = 0 ; i < element.classList.length; i++ ) {
+        if (className == element.classList[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+

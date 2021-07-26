@@ -8,101 +8,156 @@
 		<meta name="apple-mobile-web-app-capable" content="yes">
 		<meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-		<!--标准mui.css-->
+		<!--第三方css-->
 		<link rel="stylesheet" href="./css/mui.min.css">
-		<!--App自定义的css-->
-		<link rel="stylesheet" type="text/css" href="./css/app.css?v={randomstr}" />
-		<link rel="stylesheet" type="text/css" href="./css/font-awesome.css?v={randomstr}"/>
 		<link href="./css/mui.picker.css" rel="stylesheet" />
 		<link href="./css/mui.poppicker.css" rel="stylesheet" />
+		<link rel="stylesheet" type="text/css" href="./css/font-awesome.css"/>
+		<!--App自定义的css-->
+		<link rel="stylesheet" type="text/css" href="./css/app.css?v={randomstr}" />
 	</head>
 
 	<body>
 		<!--header class="mui-bar mui-bar-nav">
 			<h1 class="mui-title">DLNA控制器</h1>
 		</header-->
+		<!-- 底部菜单 -->
+		<nav class="mui-bar mui-bar-tab">
+			<a class="mui-tab-item mui-active" href="#controller">
+				<span class="mui-icon fa fa-keyboard-o"></span>
+				<span class="mui-tab-label">控制器</span>
+			</a>
+			<a class="mui-tab-item" href="#playlist">
+				<span class="mui-icon fa fa-file-movie-o"></span>
+				<span class="mui-tab-label">播放列表</span>
+			</a>
+		</nav>
 		<div class="mui-content">
-			<div class="mui-card">
-				<ul class="mui-table-view">
-					<li class="mui-table-view-cell">
-						<span>屏幕常亮</span>
-						<div id='light-handle' class="mui-switch">
-							<div class="mui-switch-handle"></div>
-						</div>
-					</li>
-				</ul>
-			</div>
+			<div id="controller" class="mui-control-content mui-active">
+				<div class="mui-card">
+					<ul class="mui-table-view">
+						<li class="mui-table-view-cell">
+							<span>屏幕常亮</span>
+							<div id='light-handle' class="mui-switch">
+								<div class="mui-switch-handle"></div>
+							</div>
+						</li>
+					</ul>
+				</div>
 
-			<div class="mui-card">
-				<div style="display:none">
-				<div class="mui-card-header mui-card-media mui-table-view-cell" style='height: 80px;'>
-						<img src="./images/iconfinder_video_40881.png" class="head-image"style='height: 60px;width:60px'/>
-						<div class="mui-media-body mui-navigate-right" style='margin-left:65px'>
-							<p id='current_file_name' style='line-height:30px;font-size:15px;color:black;overflow-x: hidden;'><!--05.mkv--></p>
-							<p id='current_file_time' style='line-height:30px'><!--01:15:30/02:15:30--></p>
-						</div>
-				</div>
-				<p id='video-progress-bar'class="mui-progressbar mui-progressbar-in" data-progress="20"><span></span></p>
-				</div>
-				<div id='circle-progress-wrapper' class="mui-row">
-					<div class="mui-col-sm-12 mui-col-xs-12">
-						<div class="mui-table-view-cell">
-							<div class="circle-progress-content" style='height:300px;width:300px;margin:0 auto'></div>
+				<div class="mui-card">
+					<div style="display:none">
+					<div class="mui-card-header mui-card-media mui-table-view-cell" style='height: 80px;'>
+							<img src="./images/iconfinder_video_40881.png" class="head-image"style='height: 60px;width:60px'/>
+							<div class="mui-media-body mui-navigate-right" style='margin-left:65px'>
+								<p id='current_file_name' style='line-height:30px;font-size:15px;color:black;overflow-x: hidden;'><!--05.mkv--></p>
+								<p id='current_file_time' style='line-height:30px'><!--01:15:30/02:15:30--></p>
+							</div>
+					</div>
+					<p id='video-progress-bar' class="mui-progressbar mui-progressbar-in" data-progress="20"><span></span></p>
+					</div>
+					<div id='circle-progress-wrapper' class="mui-row">
+						<div class="mui-col-sm-12 mui-col-xs-12">
+							<div class="mui-table-view-cell">
+								<div class="circle-progress-content" style='height:300px;width:300px;margin:0 auto'></div>
+							</div>
 						</div>
 					</div>
-				</div>
+					<!-- test end-->
 
-				<!-- test start-->
-				<div class="mui-card-content" >
-							<ul class="mui-table-view">
-								<li class="mui-table-view-cell mui-collapse">
-									<a class="fa fa-bars" style='font-size:1.5em;color:#999;display:inline' href="#"></a>
-									<span id="timeInfo" style='font-size:0.9em;float:right;color:#999'>00:00:00/00:00:00</span>
-									<div class='mui-collapse-content'>
-										<div class="mui-col-sm-12 mui-col-xs-12">
-											<div class="mui-table-view-cell" style='text-align: center;'>
-												<p id="timeOffsetInfo"></p>
-											</div>
-										</div>
-										<div style='width: 98%;'>
-											<input id='progressBar' type = "range" name = "range" min = "0" max = "100" step = "1" value = "0" style="width:100%"/>
-										</div>
-										<div class="flex-container">
-											<button class='timeSeekButton' id="btn-m-60" timeOffset='-60'>-60</button>
-											<button class='timeSeekButton' id="btn-m-30" timeOffset='-30'>-30</button>
-											<button class='timeSeekButton' id="btn-m-15" timeOffset='-15'>-15</button>
-											<button class='timeSeekButton' id="btn-p-15" timeOffset='15'>+15</button>
-											<button class='timeSeekButton' id="btn-p-30" timeOffset='30'>+30</button>
-											<button class='timeSeekButton' id="btn-p-60" timeOffset='60'>+60</button>
+					<!--div class="mui-card-content" >
+						<div class="flex-container">
+							<button id="btn-last" class="main-line"><span class="fa fa-backward fa-2x"></span></button>
+							<button id="btn-play" class="main play"><span class="fa fa-play fa-3x"></span></button>
+							<button id="btn-stop" class="main stop"><span class="fa fa-stop fa-3x"></span></button>
+							<button id="btn-next" class="main-line"><span class="fa fa-forward fa-2x"></span></button>
+						</div>
+					</div-->
+					<!--div class="mui-card-content" style='margin:5px'>
+						<button id='select-video'type="button" class="mui-btn mui-btn mui-btn-block"></button>
+					</div-->
+					<!--div class="mui-card-footer" style='padding: 5px'>
+
+					</div-->
+				</div>
+				<div class="mui-card">
+					<div class="mui-card-content" >
+						<ul class="mui-table-view">
+							<li class="mui-table-view-cell mui-collapse">
+								<a class="fa fa-bars" style='font-size:1.5em;color:#999;display:inline' href="#"></a>
+								<span id="timeInfo" style='font-size:0.9em;float:right;color:#999'>00:00:00/00:00:00</span>
+								<div class='mui-collapse-content'>
+									<div class="mui-col-sm-12 mui-col-xs-12">
+										<div class="mui-table-view-cell" style='text-align: center;'>
+											<p id="timeOffsetInfo"></p>
 										</div>
 									</div>
-								</li>
-							</ul>
-						</div>
-				<!-- test end-->
-
-				<!--div class="mui-card-content" >
-					<div class="flex-container">
-						<button id="btn-last" class="main-line"><span class="fa fa-backward fa-2x"></span></button>
-						<button id="btn-play" class="main play"><span class="fa fa-play fa-3x"></span></button>
-						<button id="btn-stop" class="main stop"><span class="fa fa-stop fa-3x"></span></button>
-						<button id="btn-next" class="main-line"><span class="fa fa-forward fa-2x"></span></button>
+									<div style='width: 98%;'>
+										<input id='progressBar' type = "range" name = "range" min = "0" max = "100" step = "1" value = "0" style="width:100%"/>
+									</div>
+									<div class="flex-container">
+										<button class='timeSeekButton' id="btn-m-60" timeOffset='-60'>-60</button>
+										<button class='timeSeekButton' id="btn-m-30" timeOffset='-30'>-30</button>
+										<button class='timeSeekButton' id="btn-m-15" timeOffset='-15'>-15</button>
+										<button class='timeSeekButton' id="btn-p-15" timeOffset='15'>+15</button>
+										<button class='timeSeekButton' id="btn-p-30" timeOffset='30'>+30</button>
+										<button class='timeSeekButton' id="btn-p-60" timeOffset='60'>+60</button>
+									</div>
+								</div>
+							</li>
+						</ul>
 					</div>
-				</div-->
-				<div class="mui-card-content" style='margin:5px'>
-					<button id='select-video'type="button" class="mui-btn mui-btn mui-btn-block"></button>
 				</div>
-				<!--div class="mui-card-footer" style='padding: 5px'>
+			</div>
+			<div id="playlist"  class="mui-control-content">
+				<div class="mui-card">
+					<ul class="mui-table-view">
+						<li class="mui-table-view-cell">
+							<span class="playlist-name" id="playlist-name"></span>
+							<button id='morePlaylist' class="mui-btn">
+								<span class="mui-icon fa fa-ellipsis-h"></span>
+							</button>
+						</li>
+					</ul>
+				</div>
 
-				</div-->
+				<div class="mui-card">
+					<ul id="video-file-list" class="mui-table-view">
+						<!--li class="mui-table-view-cell">
+							<span class="playlist-video-item-name">Item 1中文中文中文中文</span>
+							<button type="button" class="mui-btn mui-btn-danger" style="width:35px;height:35px;border-radius: 30px;">
+								<span class="mui-icon fa fa-stop"></span>
+							</button>
+						</li>
+						<li class="mui-table-view-cell">
+							<span class="playlist-video-item-name">Item 2中文中文中文中文</span>
+							<button type="button" class="mui-btn mui-btn-primary" style="width:35px;height:35px;border-radius: 30px;">
+								<span class="mui-icon fa fa-play"></span>
+							</button>
+						</li-->
+					</ul>
+				</div>
 			</div>
 		</div>
-		<script src="./js/mui.js?v={randomstr}"></script>
-		<script src="./js/mui.view.js?v={randomstr}"></script>
-		<script src="./js/mui.picker.js?v={randomstr}"></script>
-		<script src="./js/mui.poppicker.js?v={randomstr}"></script>
-		<script src="./js/circle-progress.js?v={randomstr}"></script>
-		<script src="./js/NoSleep.min.js?v={randomstr}"></script>
+
+		<div id="playlistSelector" class="mui-popover">
+			<div class="mui-popover-arrow"></div>
+			<div class="mui-scroll-wrapper">
+				<div class="mui-scroll">
+					<ul class="mui-table-view">
+						<!--li class="mui-table-view-cell"><a href="#" class='playlist-selector-item'>Item1</a></li-->
+					</ul>
+				</div>
+			</div>
+
+		</div>
+
+		<script src="./js/mui.js"></script>
+		<script src="./js/mui.view.js"></script>
+		<script src="./js/mui.picker.js"></script>
+		<script src="./js/mui.poppicker.js"></script>
+		<script src="./js/circle-progress.js"></script>
+		<script src="./js/NoSleep.min.js"></script>
 		<script src="./js/utils.js?v={randomstr}"></script>
 		<script src="./js/app.js?v={randomstr}"></script>
 

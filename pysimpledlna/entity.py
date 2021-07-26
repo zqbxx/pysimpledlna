@@ -22,6 +22,9 @@ class Playlist:
         self._filter = filter
         self._input = input
 
+    def get_playlist_name(self):
+        return Path(self.file_path).stem
+
     def clear(self):
         self._current_index = 0
         self._current_file_path = None

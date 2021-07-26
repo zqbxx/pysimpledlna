@@ -27,7 +27,7 @@
 	justify-content: space-between;
 	text-align: center;
 	width:100%;
-	margin-bottom:5px;
+	margin-top:12px;
 }
 .flex-container button {
 	margin: 1px;
@@ -163,4 +163,9 @@ input[type=range]:focus::-ms-fill-lower {
 }
 input[type=range]:focus::-ms-fill-upper {
   background: #367ebd;
+}
+.mui-table-view-cell button.mui-btn {
+    width:35px;
+    height:35px;
+    border-radius: 30px;
 }

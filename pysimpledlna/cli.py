@@ -399,7 +399,8 @@ def playlist_play(args):
     player_model: PlayerModel = player.create_model()
     ac = ActionController(play_list.file_list, device, player_model)
 
-    def setup_playlist(new_play_list):
+    # 设置播放列表
+    def _setup_playlist(new_play_list):
         playlist_contents.values = [(f, os.path.split(f)[1]) for f in new_play_list.file_list]
         ac.file_list = new_play_list.file_list
         ac.current_idx = new_play_list.current_index
@@ -407,9 +408,9 @@ def playlist_play(args):
         position_in_playlist['current_index'] = new_play_list.current_index
         playlist_contents.set_checked_index(new_play_list.current_index)
 
-    setup_playlist(play_list)
+    _setup_playlist(play_list)
 
-    # 初始化播放列表的列表
+    # 获得所有播放列表的路径和名字
     def _get_playlist_list() -> List[Tuple[str, str]]:
         playlist_list_dir = get_playlist_dir(user_dir, 'playlist')
         playlist_list = [(os.path.join(playlist_list_dir, f), os.path.splitext(f)[0]) for f in
@@ -417,12 +418,24 @@ def playlist_play(args):
                          os.path.isfile(os.path.join(playlist_list_dir, f)) and f.endswith('.playlist')]
         return playlist_list
 
+    def _setup_playlist_list(selected_name):
+        playlist_list = _get_playlist_list()
+        playlist_list_contents.values = playlist_list
+        for index, playlist in enumerate(playlist_list):
+            playlist_name = playlist[1]
+            if playlist_name == selected_name:
+                playlist_list_contents.set_checked_index(index)
+                break
+
+    _setup_playlist_list(args.name)
+
     def _get_playlist_filename_by_name(playlist_name):
         _play_list_file = get_playlist_file_path_by_name(play_list_dir, playlist_name)
         _play_list = Playlist(_play_list_file)
         _play_list.load_playlist()
         return _play_list
 
+    # 切换播放列表
     def _playlist_selected(old_value, new_value):
         old_file_path = old_value[0]
         old_file_name = old_value[1]
@@ -441,33 +454,23 @@ def playlist_play(args):
                 return False
             return os.path.samefile(old_file_path, new_file_path)
 
-
         if samefile(old_file_path, new_file_path):
             return
 
-        play_list.save_playlist(force=True)
-        play_list.file_path = new_file_path
+        ac.stop()
+
         play_list.clear()
+        play_list.file_path = new_file_path
         play_list.load_playlist()
-        setup_playlist(play_list)
+        _setup_playlist(play_list)
+        _setup_playlist_list(play_list.get_playlist_name())
         return play_list
-
-    playlist_list = _get_playlist_list()
-
-    playlist_list_contents.values = playlist_list
-    for index, playlist in enumerate(playlist_list):
-        playlist_name = playlist[1]
-        if playlist_name == args.name:
-            playlist_list_contents.set_checked_index(index)
-            break
-
-    playlist_list_contents.get_selected_item()
 
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
     from pathlib import Path
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
-    dlna_service = DLNAService(ac)
+    dlna_service = DLNAService(ac, playlist_accessor=_get_playlist_list, switch_playlist=_playlist_selected, current_playlist=lambda: play_list)
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
     player.webcontrol_url = web_root.get_player_page_url()
@@ -475,6 +478,7 @@ def playlist_play(args):
     player.create_ui()
 
     # 事件处理
+    # 切换视频
     def _video_selected(old_value, new_value):
         old_file_path = old_value[0]
         old_file_name = old_value[1]
@@ -495,12 +499,13 @@ def playlist_play(args):
             ac.play()
         else:
             play_list.load_playlist()
-            setup_playlist(play_list)
+            _setup_playlist(play_list)
             ac.play()
 
     def _update_list_ui(current_index):
         playlist_contents.current_value = playlist_contents.values[current_index][0]
 
+    # 视频进度向前
     def _forward(event, times):
         target_position = ac.current_video_position + 10 * times
         if ac.current_video_duration == 0:
@@ -512,6 +517,7 @@ def playlist_play(args):
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
+    # 视频进度向后
     def _backward(event, times):
         target_position = ac.current_video_position - 10 * times
         if target_position <= 0:
@@ -519,32 +525,38 @@ def playlist_play(args):
         time_str = format_time(target_position)
         ac.device.seek(time_str)
 
+    # 播放下一个视频
     def _next(event, times):
         ac.current_idx += times
         if ac.current_idx >= len(playlist_contents.values):
             ac.current_idx = len(playlist_contents.values) - 1
         ac.play()
 
+    # 播放上一个视频
     def _last(event, times):
         ac.current_idx -= times
         if ac.current_idx < 0:
             ac.current_idx = 0
         ac.play()
 
+    # 设置播放列表中当前视频的索引
     def _update_playlist_index(current_index):
         play_list.current_index = current_index
         play_list._current_pos = 0
         play_list.save_playlist(force=True)
 
+    # 设置播放列表中当前视频的播放位置
     def _update_playlist_video_position(o_position, n_position):
         play_list.current_pos = n_position
         play_list.save_playlist()
 
+    # 使用新的索引和播放位置强制保存播放列表
     def _save_playlist(current_index, current_position):
         play_list.current_index = current_index
         play_list.current_pos = current_position
         play_list.save_playlist(force=True)
 
+    # 根据播放列表配置跳过片头
     def _skip_head(current_index):
         
         logger.debug('==start==')
@@ -568,6 +580,7 @@ def playlist_play(args):
             play_list.current_pos = play_list.skip_head
             play_list.save_playlist(force=True)
 
+    # 根据播放列表配置跳过片尾
     def _skip_tail(o_position, n_position):
         if play_list.skip_tail == 0:
             return
@@ -575,6 +588,7 @@ def playlist_play(args):
         if n_position >= end and end > 0:
             ac.play_next()
 
+    # 退出
     def _quit():
         if ac.is_occupied:
             ac.device.stop_sync_remote_player_status()
