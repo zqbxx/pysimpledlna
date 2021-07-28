@@ -37,8 +37,14 @@ _DLNA_SERVER = SimpleDLNAServer(
     key_file=settings.get_key_file()
 )
 
+NO_SERVER_ACTION = []
+
 
 def main():
+
+    for action in [config,list_device,
+                   playlist_create,playlist_delete,playlist_list,playlist_refresh,playlist_update,playlist_view]:
+        NO_SERVER_ACTION.append(action)
 
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
@@ -80,31 +86,36 @@ def main():
     wrap_parser_exit(playlist_view_parser)
 
     args = parser.parse_args()
+    need_server_started = args.func not in NO_SERVER_ACTION
     try:
-        default_port = settings.get_default_port()
-        try_cnt = 0
-        while is_tcp_port_occupied(_DLNA_SERVER.server_ip, default_port):
-            default_port += 1
-            if default_port > 18020:
-                default_port = default_port % 20 + 18000
-            try_cnt += 1
-            if try_cnt >= 20:
-                print('没有可用的端口：', default_port)
-                sys.exit()
-        settings.set_default_port(default_port)
-        settings.write()
-        _DLNA_SERVER.server_port = default_port
-        _DLNA_SERVER.start_server()
+        if need_server_started:
+            default_port = settings.get_default_port()
+            try_cnt = 0
+            while is_tcp_port_occupied(_DLNA_SERVER.server_ip, default_port):
+                default_port += 1
+                if default_port > 18020:
+                    default_port = default_port % 20 + 18000
+                try_cnt += 1
+                if try_cnt >= 20:
+                    print('没有可用的端口：', default_port)
+                    sys.exit()
+            settings.set_default_port(default_port)
+            settings.write()
+            _DLNA_SERVER.server_port = default_port
+            _DLNA_SERVER.start_server()
         args.func(args)
     finally:
-        _DLNA_SERVER.stop_server()
+        if need_server_started:
+            _DLNA_SERVER.stop_server()
 
 
 def wrap_parser_exit(parser: argparse.ArgumentParser):
     exit_func = parser.exit
+    func = parser.get_default('func')
 
     def exit(status=0, message=None):
-        _DLNA_SERVER.stop_server()
+        if func not in NO_SERVER_ACTION:
+            _DLNA_SERVER.stop_server()
         exit_func(status, message)
 
     parser.exit = exit
@@ -118,7 +129,7 @@ def create_default_device_parser(subparsers):
     parser.add_argument('-p', '--print', dest='print_opts', required=False, default=False, action='store_true', help='是否输出配置信息')
     parser.add_argument('-cert', '--cert-file', dest='cert_file', required=False, default=None, help='用于https的公钥')
     parser.add_argument('-key', '--key-file', dest='key_file', required=False, default=None, help='用于https的私钥')
-    parser.set_defaults(func=default)
+    parser.set_defaults(func=config)
     return command, parser
 
 
@@ -221,8 +232,7 @@ def create_playlist_view_parser(subparsers):
     return command, parser
 
 
-def default(args):
-    dlna_server = _DLNA_SERVER
+def config(args):
     setting_file_path = get_setting_file_path()
     settings = Settings(setting_file_path)
 
