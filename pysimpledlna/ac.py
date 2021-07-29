@@ -34,7 +34,8 @@ class ActionController:
         self.last_idx = 0
 
         self.local_file_path = ''  #: 当前正在投屏的文件本地地址
-        self.server_file_path = ''  #: 当前正在投屏的文件服务器地址
+        self.server_file_path = ''  #: 当前正在投屏的文件本地地址对应的web地址
+        self.dlna_render_file_path = '' #: dlna显示器正在播放的文件地址
         self.is_occupied = False  #: 投屏是否被其他程序占用
 
         self.player = player
@@ -98,6 +99,7 @@ class ActionController:
                 #    self.stop_device()
                 #    os.kill(signal.CTRL_C_EVENT, 0)
         elif type == 'TrackURI':
+            self.dlna_render_file_path = new_value
             if not (self.server_file_path == old_value or self.server_file_path == new_value) and self.server_file_path != '':
                 self.is_occupied = True
                 # 其他设备进行投屏，本机设置为停止
@@ -228,12 +230,29 @@ class ActionController:
         return False
 
     def ensure_player_is_playing(self):
-        for i in range(60):
+        # 视频通过网络加载需要时间，必须确保播放器已经缓存完成并开始播放
+        # 否则，seek会失败
+        rt_in_sec = -1
+        is_playing = False
+        time_changed = False
+        is_same_file = False
+        for i in range(20):
             start = time.time()
             position_info = self.device.position_info()
-            rt_in_sec = position_info['RelTimeInSeconds']
-            if rt_in_sec >= 1:
+            is_same_file = self.server_file_path == position_info['TrackURI']
+            if rt_in_sec == -1:
+                rt_in_sec = position_info['RelTimeInSeconds']
+            elif position_info['RelTimeInSeconds'] != rt_in_sec:
+                time_changed = True
+
+            transport_info = self.device.transport_info()
+            current_status = transport_info['CurrentTransportState']
+            if current_status == 'PAUSED_PLAYBACK' or 'PLAYING':
+                is_playing = True
+
+            if is_playing and time_changed and is_same_file:
                 return
+
             logger.debug(f'waiting for device: {str(i)}')
             dur = time.time() - start
             if dur >= 1:
