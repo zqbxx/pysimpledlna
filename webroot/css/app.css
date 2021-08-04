@@ -19,7 +19,7 @@
 	font-size: 14px;
 	color: #8f8f94;
 }
-.flex-container {
+.flex-container, .flex-container-1 {
 	display: -webkit-box;
 	display: -webkit-flex;
 	display: flex;
@@ -46,6 +46,25 @@
 }
 .flex-container a.active {
 	color: #55aaff;
+}
+.flex-container-1 {
+    margin-bottom: 10px;
+    padding-left:10px;
+    padding-right:10px;
+}
+.flex-container-1 button {
+	width: 47px;
+	height: 47px;
+	border: 1px solid #ddd;
+	border-radius: 25px;
+	background-clip: padding-box;
+	padding:8px;
+	display: inline-block;
+	text-align: center;
+}
+
+.flex-container-1 button.fa {
+	width:50%;
 }
 
 .head-img {
@@ -78,6 +97,9 @@
 	fill: #ecf0f1;
 }
 
+#circle-progress-wrapper > div > div.mui-table-view-cell {
+    padding-bottom:8px;
+}
 
 input[type=range] {
   -webkit-appearance: none;

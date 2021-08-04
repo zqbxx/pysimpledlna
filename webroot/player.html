@@ -13,6 +13,7 @@
 		<link href="./css/mui.picker.css" rel="stylesheet" />
 		<link href="./css/mui.poppicker.css" rel="stylesheet" />
 		<link rel="stylesheet" type="text/css" href="./css/font-awesome.css"/>
+		<link rel="stylesheet" type="text/css" href="./css/chimee-mobile-player.browser.css"/>
 		<!--App自定义的css-->
 		<link rel="stylesheet" type="text/css" href="./css/app.css?v={randomstr}" />
 	</head>
@@ -57,28 +58,25 @@
 					<p id='video-progress-bar' class="mui-progressbar mui-progressbar-in" data-progress="20"><span></span></p>
 					</div>
 					<div id='circle-progress-wrapper' class="mui-row">
-						<div class="mui-col-sm-12 mui-col-xs-12">
+						<div id='circleProgress' class="mui-col-sm-12 mui-col-xs-12">
 							<div class="mui-table-view-cell">
 								<div class="circle-progress-content" style='height:300px;width:300px;margin:0 auto'></div>
 							</div>
 						</div>
-					</div>
-					<!-- test end-->
+						<div id='videoPlayer' class="mui-col-sm-12 mui-col-xs-12">
+							<div class="mui-table-view-cell" id='local' style="height:100%;width:100%">
 
-					<!--div class="mui-card-content" >
-						<div class="flex-container">
-							<button id="btn-last" class="main-line"><span class="fa fa-backward fa-2x"></span></button>
-							<button id="btn-play" class="main play"><span class="fa fa-play fa-3x"></span></button>
-							<button id="btn-stop" class="main stop"><span class="fa fa-stop fa-3x"></span></button>
-							<button id="btn-next" class="main-line"><span class="fa fa-forward fa-2x"></span></button>
+							</div>
 						</div>
-					</div-->
-					<!--div class="mui-card-content" style='margin:5px'>
-						<button id='select-video'type="button" class="mui-btn mui-btn mui-btn-block"></button>
-					</div-->
-					<!--div class="mui-card-footer" style='padding: 5px'>
-
-					</div-->
+						<div class="flex-container-1" style="margin-top:100px">
+							<button id='stopVideo' type="button" class="mui-btn mui-btn-danger fa fa-stop-circle-o">
+								停止播放
+							</button>
+							<button id='playLocal' type="button" class="mui-btn mui-btn-primary fa fa-play-circle-o">
+								本机播放
+							</button>
+						</div>
+					</div>
 				</div>
 				<div class="mui-card">
 					<div class="mui-card-content" >
@@ -158,6 +156,7 @@
 		<script src="./js/mui.poppicker.js"></script>
 		<script src="./js/circle-progress.js"></script>
 		<script src="./js/NoSleep.min.js"></script>
+		<script src="./js/chimee-mobile-player.browser.js"></script>
 		<script src="./js/utils.js?v={randomstr}"></script>
 		<script src="./js/app.js?v={randomstr}"></script>
 
