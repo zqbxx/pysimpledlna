@@ -178,6 +178,7 @@ class DLNAService(DefaultResource):
             'index_in_playlist': video_idx,
             'file_name_list': file_name_list,
             'current_playlist_name': Path(current_playlist_path).stem,
+            'is_occupied': self.ac.is_occupied
         }
 
         return json.dumps(ret_obj, indent=2).encode('utf-8')

@@ -16,8 +16,9 @@ mui.ready(function() {
         isSeeking: false,
         currentPlaylistName: '',
         playlistFileNameList: [],
+        isOccupied: undefined,
         chimee: undefined,
-        isLocal: false
+        isLocal: false,
     };
 
     let playListPicker = new mui.PopPicker();
@@ -188,6 +189,7 @@ mui.ready(function() {
                         current_video_changed = global.currentSelectedIndex != data.index;
                         video_position_changed = global.currentPosition !=  data.position;
                         player_status_changed = global.currentStatus != data.current_status
+                        occupied_status_changed = global.isOccupied != data.is_occupied
 
                         // 深拷贝
                         let oldGlobal = Object.assign({}, global);
@@ -198,6 +200,8 @@ mui.ready(function() {
                         global.videoDuration = data.duration;
                         global.currentStatus = data.current_status;
                         global.currentSelectedIndex = data.index_in_playlist;
+                        global.isOccupied = data.is_occupied
+
                         // 当前播放的播放列表状态
                         global.playingFilePath = data.playing_file_path;
                         global.playingFileName = data.playing_file_name
@@ -212,10 +216,20 @@ mui.ready(function() {
                             }
                         }
 
-                        document.getElementById('current_file_name').innerHTML = data.file_name;
-                        document.getElementById('current_file_time').innerHTML = data.position + '/' + data.duration;
-
-                        mui('#video-progress-bar').progressbar().setProgress(Math.round(data.position/data.duration*100));
+                        if (occupied_status_changed || player_status_changed) {
+                            let txtStatus = document.getElementById('playerStatus')
+                            if(global.isOccupied)
+                                txtStatus.innerHTML = '投屏被占用';
+                            else if (global.currentStatus == 'Stop')
+                                txtStatus.innerHTML = '已停止投屏';
+                            else if (global.currentStatus == 'Pause')
+                                txtStatus.innerHTML = '投屏已暂停';
+                            else if (global.currentStatus == 'Play')
+                                txtStatus.innerHTML = '正在播放'
+                        }
+                        document.getElementById('currentFileName').innerHTML = global.playingFileName;
+                        //document.getElementById('current_file_time').innerHTML = data.position + '/' + data.duration;
+                        //mui('#video-progress-bar').progressbar().setProgress(Math.round(data.position/data.duration*100));
                         circleProgress.attr({ value: data.position, });
 
                         if (playlist_changed) {
@@ -307,29 +321,49 @@ mui.ready(function() {
         if (hasClass(this, 'fa-arrow-circle-left')) {
             mask.show();
             global.isLocal = false;
-            offset = parseInt(global.chimee.currentTime - global.currentPosition);
+            let offset = parseInt(global.chimee.currentTime - global.currentPosition);
             global.chimee.destroy();
+            mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){
+                thisElement.classList.add('fa-play-circle-o');
+                thisElement.classList.remove('fa-arrow-circle-left');
+                thisElement.innerText = '本机播放';
+                document.getElementById('circleProgress').style.display = '';
+                document.getElementById('videoPlayer').style.display = 'none';
+                updateButton(false);
+                let isFirst = true;
+                let timer = setInterval(function(){
+                    if (global.currentStatus == 'Play') {
+                        clearInterval(timer);
+                        mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
+                            mui.later(function(){
+                                mask.close();
+                            }, 100);
+                        });
+                    } else {
+                        if (isFirst) {
+                            // 手机端状态可能尚未更新，第一次进入跳过
+                            isFirst = false;
+                        } else {
+                            //重新发送播放指令，有时候第一次发送无效
+                            mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){});
+                        }
+
+                    }
+                }, 500);
+            });
             mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
                 mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){
-                    thisElement.classList.add('fa-play-circle-o');
-                    thisElement.classList.remove('fa-arrow-circle-left');
-                    thisElement.innerText = '本机播放';
-                    document.getElementById('circleProgress').style.display = '';
-                    document.getElementById('videoPlayer').style.display = 'none';
-                    updateButton(false)
-                    mui.later(function(){
-                        mask.close();
-                    }, 300);
+
                 });
             });
         } else if (hasClass(this, 'fa-play-circle-o')) {
             mask.show();
+            document.getElementById('circleProgress').style.display = 'none';
+            document.getElementById('videoPlayer').style.display = '';
             global.isLocal = true;
             global.chimee = new ChimeeMobilePlayer({  wrapper: '#videoPlayer', controls: true, autoplay: true,})
             flag = -1;
             global.chimee.on('timeupdate', function(){
-                console.log('flag:' + flag)
-                console.log('global.chimee.currentTime:' + global.chimee.currentTime)
                 if (flag == -1 && global.chimee.currentTime > 0.3) {
                     flag = 1;
                     global.chimee.currentTime = global.currentPosition;
@@ -340,8 +374,6 @@ mui.ready(function() {
                 thisElement.classList.remove('fa-play-circle-o');
                 thisElement.classList.add('fa-arrow-circle-left');
                 thisElement.innerText = '返回投屏';
-                document.getElementById('circleProgress').style.display = 'none';
-                document.getElementById('videoPlayer').style.display = '';
                 updateButton(true)
                 mui.later(function(){
 					mask.close();
