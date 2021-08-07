@@ -103,8 +103,15 @@ class DLNAService(DefaultResource):
             return self.switch_playlist()
         elif request_command == 'playAtApp':
             return self.playAtApp()
+        elif request_command == 'backToDlna':
+            pos = int(request.params.get('pos'))
+            self.back_to_dlna(pos)
+            return ''
 
         abort(404, "错误的命令")
+
+    def back_to_dlna(self, seek_to: int):
+        self.ac.resume(stop=False, seek_to=seek_to)
 
     def index(self):
         index = int(request.params.get('index'))

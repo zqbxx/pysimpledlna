@@ -346,14 +346,8 @@ mui.ready(function() {
                             //重新发送播放指令，有时候第一次发送无效
                             mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){});
                         }
-
                     }
                 }, 500);
-            });
-            mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
-                mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){
-
-                });
             });
         } else if (hasClass(this, 'fa-play-circle-o')) {
             mask.show();
@@ -369,7 +363,7 @@ mui.ready(function() {
                 }
 			});
 			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){
-                global.chimee.load(global.apiUrl + '?command=playAtApp');
+                global.chimee.load(global.apiUrl + '?command=playAtApp&r=' + new Date().getTime());
                 thisElement.classList.remove('fa-play-circle-o');
                 thisElement.classList.add('fa-arrow-circle-left');
                 thisElement.innerText = '返回投屏';

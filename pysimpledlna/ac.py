@@ -192,17 +192,27 @@ class ActionController:
             self.events['play'].fire(self.current_idx)
             self.enable_hook = True
 
-    def resume(self):
-        time_str = format_time(self.current_video_position)
-        self.device.stop()
-        self.device.set_AV_transport_URI(self.server_file_path)
-        self.device.play()
-        self.player.player_status = PlayerStatus.PLAY
-        self.ensure_player_is_playing()
-        self.device.seek(time_str)
-        # 强制下一次轮询时强制更新
-        if self.device.sync_thread is not None:
-            self.device.sync_thread.last_status = None
+    def resume(self, stop=True, seek_to: int = 0):
+        self.enable_hook = False
+        try:
+            time_str = format_time(self.current_video_position)
+
+            if seek_to > 0:
+                time_str = format_time(seek_to)
+
+            if stop:
+                self.device.stop()
+                self.device.set_AV_transport_URI(self.server_file_path)
+
+            self.device.play()
+            self.player.player_status = PlayerStatus.PLAY
+            self.ensure_player_is_playing()
+            self.device.seek(time_str)
+            # 强制下一次轮询时强制更新
+            if self.device.sync_thread is not None:
+                self.device.sync_thread.last_status = None
+        finally:
+            self.enable_hook = True
 
     def stop(self):
         if self.player.player_status != PlayerStatus.STOP:
