@@ -3,7 +3,7 @@ mui.ready(function() {
 
     //let userPicker = new mui.PopPicker();
     
-    device_key = '{device_key}'
+    device_key = '{device_key}';
     
     let global = {
         currentSelectedIndex: 0,
@@ -134,24 +134,24 @@ mui.ready(function() {
 	    updateSeekInfo(0);
 	    setTimeout(function(){
 	        global.isSeeking = false;
-	    }, 1000)
+	    }, 1000);
 	}, 1000);
 
 	let offsetBtns = document.querySelectorAll('.timeSeekButton')
 	for (let ob of offsetBtns) {
-		ob.addEventListener('click', seekBtnFunc)
-		ob.addEventListener('click', seekBtnEndFunc)
+		ob.addEventListener('click', seekBtnFunc);
+		ob.addEventListener('click', seekBtnEndFunc);
 	}
 
     let startPos = 0
     let progressBar = document.getElementById('progressBar');
     let rangeSeekStartFunc = function(){
         startPos = global.currentPosition;
-        global.isSeeking = true
+        global.isSeeking = true;
     }
 
 	let rangeSeekFunc = function() {
-	    offset = progressBar.value - startPos
+	    offset = progressBar.value - startPos;
 	    updateSeekInfo(offset);
 	};
 	let rangeSeekEndFunc =function() {
@@ -163,8 +163,7 @@ mui.ready(function() {
 	    updateSeekInfo(0);
 	    setTimeout(function(){
 	        global.isSeeking = false;
-
-	    }, 1000)
+	    }, 1000);
 
 	};
 
@@ -179,7 +178,7 @@ mui.ready(function() {
     //数据更新
     function updateData() {
         if (global.isLocal)
-            return
+            return;
         if (!global.isSeeking) {
             mui.getJSON(global.apiUrl,{command:'status', r: '' +new Date().getTime()},function(data){
 
@@ -188,8 +187,8 @@ mui.ready(function() {
                         playlist_changed = global.currentPlaylistName != data.current_playlist_name;
                         current_video_changed = global.currentSelectedIndex != data.index;
                         video_position_changed = global.currentPosition !=  data.position;
-                        player_status_changed = global.currentStatus != data.current_status
-                        occupied_status_changed = global.isOccupied != data.is_occupied
+                        player_status_changed = global.currentStatus != data.current_status;
+                        occupied_status_changed = global.isOccupied != data.is_occupied;
 
                         // 深拷贝
                         let oldGlobal = Object.assign({}, global);
@@ -200,12 +199,12 @@ mui.ready(function() {
                         global.videoDuration = data.duration;
                         global.currentStatus = data.current_status;
                         global.currentSelectedIndex = data.index_in_playlist;
-                        global.isOccupied = data.is_occupied
+                        global.isOccupied = data.is_occupied;
 
                         // 当前播放的播放列表状态
                         global.playingFilePath = data.playing_file_path;
-                        global.playingFileName = data.playing_file_name
-                        global.playlistFileNameList = data.file_name_list
+                        global.playingFileName = data.playing_file_name;
+                        global.playlistFileNameList = data.file_name_list;
                         global.currentPlaylistName = data.current_playlist_name;
 
                         if (player_status_changed) {
@@ -225,7 +224,7 @@ mui.ready(function() {
                             else if (global.currentStatus == 'Pause')
                                 txtStatus.innerHTML = '投屏已暂停';
                             else if (global.currentStatus == 'Play')
-                                txtStatus.innerHTML = '正在播放'
+                                txtStatus.innerHTML = '正在播放';
                         }
                         document.getElementById('currentFileName').innerHTML = global.playingFileName;
                         //document.getElementById('current_file_time').innerHTML = data.position + '/' + data.duration;
@@ -250,7 +249,7 @@ mui.ready(function() {
                         }
 
                         if (current_video_changed || playlist_changed) {
-                            updatePlaylistVideoStatus(data)
+                            updatePlaylistVideoStatus(data);
                         }
 
                     }
@@ -272,7 +271,7 @@ mui.ready(function() {
                     text: data[i]
                 }
             }
-            playListPicker.setData(pickerData)
+            playListPicker.setData(pickerData);
         });
     }
 
@@ -374,7 +373,7 @@ mui.ready(function() {
                 thisElement.classList.remove('fa-play-circle-o');
                 thisElement.classList.add('fa-arrow-circle-left');
                 thisElement.innerText = '返回投屏';
-                updateButton(true)
+                updateButton(true);
                 mui.later(function(){
 					mask.close();
 				}, 300);
@@ -385,7 +384,7 @@ mui.ready(function() {
 
     function createPlaylistVideos(file_name_list, index) {
         videoFileList = document.getElementById('video-file-list');
-		videoFileList.innerHTML = ''
+		videoFileList.innerHTML = '';
         for (let i = 0; i < file_name_list.length; i++) {
             let li = document.createElement('li');
             li.className = 'mui-table-view-cell';
@@ -403,8 +402,8 @@ mui.ready(function() {
 
             btn.setAttribute('videoIndex', "" + i)
 
-            li.appendChild(spanName)
-            li.appendChild(btn)
+            li.appendChild(spanName);
+            li.appendChild(btn);
             btn.addEventListener('tap', function() {
                 currentIndex = -1;
                 if (hasClass(this, 'fa-play')) {
@@ -430,9 +429,9 @@ mui.ready(function() {
 
     function updatePlaylistVideoStatus(data) {
         if (data.index)
-            global.currentSelectedIndex = data.index
+            global.currentSelectedIndex = data.index;
         if (data.current_status)
-            global.currentStatus = data.current_status
+            global.currentStatus = data.current_status;
         let btnArray = document.querySelectorAll('#video-file-list button');
         for (let j = 0 ; j < btnArray.length ; j++ ) {
             if ( j != global.currentSelectedIndex ) {
