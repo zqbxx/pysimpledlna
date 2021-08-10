@@ -1,5 +1,7 @@
 import random
+import subprocess
 from pathlib import Path
+from typing import List
 from xml.dom.minidom import Childless
 import time
 import os
@@ -108,6 +110,11 @@ def get_setting_file_path():
     return os.path.join(user_dir, 'settings.json')
 
 
+def get_history_file_path():
+    user_dir = get_user_data_dir()
+    return os.path.join(user_dir, 'history.txt')
+
+
 def get_free_tcp_port():
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp.bind(('', 0))
@@ -131,3 +138,11 @@ def is_tcp_port_occupied(ip_address: str, port: int):
                 tcp.close()
         except:
             pass
+
+
+def start_subprocess(command, cwd='.'):
+    return subprocess.Popen(command, cwd=cwd, shell=True, creationflags=subprocess.DETACHED_PROCESS)
+
+
+def is_in_prompt_mode(args):
+    return hasattr(args, 'prompt_mode')
