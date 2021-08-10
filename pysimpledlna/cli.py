@@ -4,7 +4,9 @@ import sys
 import time
 import signal
 import logging
+import traceback
 from typing import List, Tuple
+from pathlib import Path
 
 from pysimpledlna.ui.playlist import PlayListEditor
 
@@ -25,7 +27,8 @@ import os
 from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
-    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path)
+    get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path,
+    get_history_file_path, is_in_prompt_mode, is_in_nuitka, start_subprocess)
 from pysimpledlna.entity import Playlist, Settings
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -49,43 +52,27 @@ def main():
     parser = argparse.ArgumentParser()
     wrap_parser_exit(parser)
 
-    subparsers = parser.add_subparsers(help='DLAN Server')
-
-    _, list_parser = create_default_device_parser(subparsers)
-    wrap_parser_exit(list_parser)
-
-    _, list_parser = create_list_parser(subparsers)
-    wrap_parser_exit(list_parser)
-
-    _, play_parser = create_play_parser(subparsers)
-    wrap_parser_exit(play_parser)
-
-    _, playlist_parser = create_playlist_parser(subparsers)
-    playlist_subparsers = playlist_parser.add_subparsers(help='playlist')
-    wrap_parser_exit(playlist_parser)
-
-    _, playlist_create_parser = create_playlist_create_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_create_parser)
-
-    _, playlist_delete_parser = create_playlist_delete_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_delete_parser)
-
-    _, playlist_play_parser = create_playlist_play_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_play_parser)
-
-    _, playlist_list_parser = create_playlist_list_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_list_parser)
-
-    _, playlist_refresh_parser = create_playlist_refresh_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_refresh_parser)
-
-    _, playlist_update_parser = create_playlist_update_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_update_parser)
-
-    _, playlist_view_parser = create_playlist_view_parser(playlist_subparsers)
-    wrap_parser_exit(playlist_view_parser)
+    create_args(parser)
 
     args = parser.parse_args()
+
+    if not hasattr(args, 'func'):
+        from prompt_toolkit_ext import PromptArgumentParser, run_prompt, LimitSizeFileHistory
+        from prompt_toolkit_ext.completer import ArgParserCompleter
+        from prompt_toolkit_ext.lexer import ArgParseLexer
+        prompt_argparser = PromptArgumentParser()
+        create_args(prompt_argparser)
+        history = LimitSizeFileHistory(get_history_file_path(), 100)
+        from prompt_toolkit.lexers import PygmentsLexer
+        try:
+            run_prompt(prompt_parser=prompt_argparser,
+                       prompt_history=history,
+                       prompt_completer=ArgParserCompleter(prompt_argparser),
+                       prompt_lexer=PygmentsLexer(ArgParseLexer))
+        except Exception as e:
+            print(e)
+        return
+
     need_server_started = args.func not in NO_SERVER_ACTION
     try:
         if need_server_started:
@@ -107,6 +94,33 @@ def main():
     finally:
         if need_server_started:
             _DLNA_SERVER.stop_server()
+
+
+def create_args(parser):
+    subparsers = parser.add_subparsers(help='DLAN Server')
+    _, list_parser = create_default_device_parser(subparsers)
+    wrap_parser_exit(list_parser)
+    _, list_parser = create_list_parser(subparsers)
+    wrap_parser_exit(list_parser)
+    _, play_parser = create_play_parser(subparsers)
+    wrap_parser_exit(play_parser)
+    _, playlist_parser = create_playlist_parser(subparsers)
+    playlist_subparsers = playlist_parser.add_subparsers(help='playlist')
+    wrap_parser_exit(playlist_parser)
+    _, playlist_create_parser = create_playlist_create_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_create_parser)
+    _, playlist_delete_parser = create_playlist_delete_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_delete_parser)
+    _, playlist_play_parser = create_playlist_play_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_play_parser)
+    _, playlist_list_parser = create_playlist_list_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_list_parser)
+    _, playlist_refresh_parser = create_playlist_refresh_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_refresh_parser)
+    _, playlist_update_parser = create_playlist_update_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_update_parser)
+    _, playlist_view_parser = create_playlist_view_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_view_parser)
 
 
 def wrap_parser_exit(parser: argparse.ArgumentParser):
@@ -355,6 +369,27 @@ def playlist_list(args):
 
 def playlist_play(args):
 
+    if is_in_prompt_mode(args):
+        try:
+            cmd = list()
+            cwd = '.'
+            if not is_in_nuitka():
+                cmd = ['python', os.path.join(os.path.split(os.path.abspath(__file__))[0], 'cli.py')]
+                cwd = str(Path(os.path.join(os.path.split(os.path.abspath(__file__))[0])).parent)
+            else:
+                cmd = [get_abs_path('pysimpledlna.exe'), ]
+                cwd = get_abs_path()
+
+            for arg in args.prompt_args:
+                cmd.append(arg)
+            print('启动目录：', cwd)
+            print('启动命令：', ' '.join(cmd))
+            process = start_subprocess(cmd, cwd)
+            print('新进程ID：' + str(process.pid))
+        except:
+            traceback.print_exc()
+        return
+
     from pysimpledlna.ui.playlist import (
         PlayListPlayer, PlayerModel,
         VideoPositionFormatter, VideoControlFormatter, VideoFileFormatter)
@@ -478,7 +513,7 @@ def playlist_play(args):
 
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
-    from pathlib import Path
+
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
     dlna_service = DLNAService(ac, playlist_accessor=_get_playlist_list, switch_playlist=_playlist_selected, current_playlist=lambda: play_list)
     dlna_server.app.route(**web_root.get_route_params())
