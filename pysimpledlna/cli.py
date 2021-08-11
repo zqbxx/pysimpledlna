@@ -45,8 +45,15 @@ NO_SERVER_ACTION = []
 
 def main():
 
-    for action in [config,list_device,
-                   playlist_create,playlist_delete,playlist_list,playlist_refresh,playlist_update,playlist_view]:
+    for action in [config,
+                   list_device,
+                   playlist_create,
+                   playlist_delete,
+                   playlist_list,
+                   playlist_refresh,
+                   playlist_update,
+                   playlist_view,
+                   playlist_rename,]:
         NO_SERVER_ACTION.append(action)
 
     parser = argparse.ArgumentParser()
@@ -121,6 +128,8 @@ def create_args(parser):
     wrap_parser_exit(playlist_update_parser)
     _, playlist_view_parser = create_playlist_view_parser(playlist_subparsers)
     wrap_parser_exit(playlist_view_parser)
+    _, playlist_rename_parser = create_playlist_rename_parser(playlist_subparsers)
+    wrap_parser_exit(playlist_rename_parser)
 
 
 def wrap_parser_exit(parser: argparse.ArgumentParser):
@@ -243,6 +252,15 @@ def create_playlist_view_parser(subparsers):
     parser = subparsers.add_parser(command, help='更新播放列表')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.set_defaults(func=playlist_view)
+    return command, parser
+
+
+def create_playlist_rename_parser(subparsers):
+    command = 'rename'
+    parser = subparsers.add_parser(command, help='重命名播放列表')
+    parser.add_argument('-on', '--old-name', dest='old_name', required=True, type=str, help='旧播放列表名字')
+    parser.add_argument('-nn', '--new-name', dest='new_name', required=True, type=str, help='新播放列表名字')
+    parser.set_defaults(func=playlist_rename)
     return command, parser
 
 
@@ -728,6 +746,27 @@ def playlist_view(args):
     editor = PlayListEditor(play_list)
     editor.create_content()
     editor.run()
+
+
+def playlist_rename(args):
+    user_dir = get_user_data_dir()
+
+    old_play_list_file = get_playlist_file_path_by_name(get_playlist_dir(user_dir, 'playlist'), args.old_name)
+    if not os.path.exists(old_play_list_file):
+        print('播放列表[' + args.old_name + '][' + old_play_list_file + ']不存在')
+        return
+
+    new_play_list_file = get_playlist_file_path_by_name(get_playlist_dir(user_dir, 'playlist'), args.new_name)
+    if os.path.exists(new_play_list_file):
+        print('播放列表[' + args.new_name + '][' + new_play_list_file + ']已存在')
+        return
+
+    os.rename(old_play_list_file, new_play_list_file)
+
+    if os.path.exists(new_play_list_file):
+        print('播放列表重命名成功')
+    else:
+        print('播放列表重命名失败')
 
 
 def get_playlist_file_path(args):
