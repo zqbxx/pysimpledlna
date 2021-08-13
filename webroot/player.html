@@ -28,18 +28,19 @@
 				<span class="mui-icon fa fa-keyboard-o"></span>
 				<span class="mui-tab-label">控制器</span>
 			</a>
-			<a class="mui-tab-item" href="#playlist">
+			<a class="mui-tab-item" href="#playlist" id="buttonPlaylistMenu">
 				<span class="mui-icon fa fa-file-movie-o"></span>
 				<span class="mui-tab-label">播放列表</span>
 			</a>
 		</nav>
+		<!-- 控制器页面 -->
 		<div class="mui-content">
+			<!-- 圆形进度条 -->
 			<div id="controller" class="mui-control-content mui-active">
 				<div class="mui-card">
 					<div class="dlna-player-info">
 						<div><i class="fa fa-podcast"></i><h6 id='playerStatus'></h6></div>
 						<div><i class="fa fa-file-video-o"></i><h6 id='currentFileName'></h6></div>
-
 					</div>
 					<div id='circle-progress-wrapper' class="mui-row">
 						<div id='circleProgress' class="mui-col-sm-12 mui-col-xs-12">
@@ -48,7 +49,7 @@
 							</div>
 						</div>
 						<div id='videoPlayer' class="mui-col-sm-12 mui-col-xs-12">
-							<div class="mui-table-view-cell" id='local' style="height:100%;width:100%">
+							<div class="mui-table-view-cell" id='local'>
 
 							</div>
 						</div>
@@ -132,6 +133,7 @@
 			</div>
 		</div>
 
+		<!-- 播放列表页面 -->
 		<div id="playlistSelector" class="mui-popover">
 			<div class="mui-popover-arrow"></div>
 			<div class="mui-scroll-wrapper">
@@ -151,6 +153,8 @@
 		<script src="./js/circle-progress.js"></script>
 		<script src="./js/NoSleep.min.js"></script>
 		<script src="./js/chimee-mobile-player.browser.js"></script>
+		<script>window.noZensmooth = true</script>
+		<script src="./js/zenscroll-min.js"></script>
 		<script src="./js/utils.js?v={randomstr}"></script>
 		<script src="./js/app.js?v={randomstr}"></script>
 

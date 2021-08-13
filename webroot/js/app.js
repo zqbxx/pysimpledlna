@@ -320,46 +320,40 @@ mui.ready(function() {
         if (hasClass(this, 'fa-arrow-circle-left')) {
             mask.show();
             global.isLocal = false;
+            let pos = parseInt(global.chimee.currentTime);
             let offset = parseInt(global.chimee.currentTime - global.currentPosition);
             global.chimee.destroy();
-            mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){
+            mui.getJSON(global.apiUrl,{command:'backToDlna', pos: pos - 3,  r: '' +new Date().getTime()},function(data){
                 thisElement.classList.add('fa-play-circle-o');
                 thisElement.classList.remove('fa-arrow-circle-left');
                 thisElement.innerText = '本机播放';
                 document.getElementById('circleProgress').style.display = '';
                 document.getElementById('videoPlayer').style.display = 'none';
                 updateButton(false);
-                let isFirst = true;
-                let timer = setInterval(function(){
-                    if (global.currentStatus == 'Play') {
-                        clearInterval(timer);
-                        mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
-                            mui.later(function(){
-                                mask.close();
-                            }, 100);
-                        });
-                    } else {
-                        if (isFirst) {
-                            // 手机端状态可能尚未更新，第一次进入跳过
-                            isFirst = false;
-                        } else {
-                            //重新发送播放指令，有时候第一次发送无效
-                            mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){});
-                        }
-                    }
-                }, 500);
+                mui.later(function(){
+                    mask.close();
+                }, 100);
             });
         } else if (hasClass(this, 'fa-play-circle-o')) {
             mask.show();
             document.getElementById('circleProgress').style.display = 'none';
             document.getElementById('videoPlayer').style.display = '';
             global.isLocal = true;
-            global.chimee = new ChimeeMobilePlayer({  wrapper: '#videoPlayer', controls: true, autoplay: true,})
+            global.chimee = new ChimeeMobilePlayer({
+				wrapper: '#videoPlayer',
+				controls: true,
+				autoplay: true,
+				x5VideoPlayerFullscreen: true,
+				x5VideoOrientation: 'portrait',
+				xWebkitAirplay: true,
+				width:'100%',
+				height:'100%',
+			});
             flag = -1;
             global.chimee.on('timeupdate', function(){
                 if (flag == -1 && global.chimee.currentTime > 0.3) {
                     flag = 1;
-                    global.chimee.currentTime = global.currentPosition;
+                    global.chimee.currentTime = global.currentPosition - 3;
                 }
 			});
 			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){
@@ -374,6 +368,14 @@ mui.ready(function() {
 			});
 
         }
+    });
+
+    document.getElementById('buttonPlaylistMenu').addEventListener('tap', function() {
+        setTimeout(function(){
+            var targetEle = document.querySelector('ul#video-file-list li button.mui-btn.fa.mui-btn-danger');
+            zenscroll.center(targetEle, 0)
+        }, 1);
+
     });
 
     function createPlaylistVideos(file_name_list, index) {
