@@ -29,7 +29,7 @@ from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
     get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path,
     get_history_file_path, is_in_prompt_mode, is_in_nuitka, start_subprocess)
-from pysimpledlna.entity import Playlist, Settings
+from pysimpledlna.entity import LocalFilePlaylist, Settings, LocalTempFilePlaylist, PlayListWrapper, Playlist
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
 settings = Settings(get_setting_file_path())
@@ -304,53 +304,27 @@ def list_device(args):
 
 def play(args):
 
-    dlna_server = _DLNA_SERVER
+    user_dir = get_user_data_dir()
+    playlist_dir = get_playlist_dir(user_dir, 'playlist')
+    playlist_path = get_playlist_file_path_by_name(playlist_dir, '临时列表')
+    if os.path.exists(playlist_path):
+        os.remove(playlist_path)
 
-    device: Device = None
-    if args.auto_selected:
-        for i, d in enumerate(dlna_server.get_devices(5)):
-            device = d
-            break
-    else:
-        url = args.url
-        if url is None:
-            settings = Settings(get_setting_file_path())
-            default_device_urls: List[str] = settings.get_default_devices()
-            for default_device_url in default_device_urls:
-                device = dlna_server.find_device(default_device_url)
-                if device is not None:
-                    break
-        else:
-            device = dlna_server.parse_xml(url)
+    temp_playlist = LocalTempFilePlaylist(playlist_path)
+    temp_playlist.media_list = args.input
+    temp_playlist.save_playlist(force=True)
 
-    if device is None:
-        print('没有找到DLNA设备')
-        return
+    setattr(args, 'name', '临时列表')
+    delattr(args, 'input')
 
-    dlna_server.register_device(device)
-
-    file_list = args.input
-    if len(file_list) == 0:
-        return
-
-    ac = ActionController(file_list, device)
-    device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
-    device.start_sync_remote_player_status()
-    ac.play()
-    signal.signal(signal.SIGINT, signal_handler)
-    try:
-        while True:
-            time.sleep(1)
-    except:
-        stop_device(device)
-        dlna_server.stop_server()
+    playlist_play(args)
 
 
 def playlist_create(args):
     play_list_file = get_playlist_file_path(args)
     input_dirs: [] = args.input
     filename_filter: str = args.filter
-    pl = Playlist(play_list_file, filter=filename_filter, input=input_dirs)
+    pl = LocalFilePlaylist(play_list_file, _filter=filename_filter, input=input_dirs)
     pl.skip_head = args.skip_head
     pl.skip_tail = args.skip_tail
     pl.filter_files()
@@ -456,22 +430,23 @@ def playlist_play(args):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
-    play_list = Playlist(play_list_file)
-    play_list.load_playlist()
+    play_list = PlayListWrapper()
+    play_list.playlist = Playlist.get_playlist(play_list_file)
+    play_list.playlist.load_playlist()
 
     player_model: PlayerModel = player.create_model()
-    ac = ActionController(play_list.file_list, device, player_model)
+    ac = ActionController(play_list.playlist.media_list, device, player_model)
 
     # 设置播放列表
     def _setup_playlist(new_play_list):
-        playlist_contents.values = [(f, os.path.split(f)[1]) for f in new_play_list.file_list]
-        ac.file_list = new_play_list.file_list
+        playlist_contents.values = [(f, os.path.split(f)[1]) for f in new_play_list.media_list]
+        ac.file_list = new_play_list.media_list
         ac.current_idx = new_play_list.current_index
         position_in_playlist['current_pos'] = new_play_list.current_pos
         position_in_playlist['current_index'] = new_play_list.current_index
         playlist_contents.set_checked_index(new_play_list.current_index)
 
-    _setup_playlist(play_list)
+    _setup_playlist(play_list.playlist)
 
     # 获得所有播放列表的路径和名字
     def _get_playlist_list() -> List[Tuple[str, str]]:
@@ -494,7 +469,7 @@ def playlist_play(args):
 
     def _get_playlist_filename_by_name(playlist_name):
         _play_list_file = get_playlist_file_path_by_name(play_list_dir, playlist_name)
-        _play_list = Playlist(_play_list_file)
+        _play_list = LocalFilePlaylist(_play_list_file)
         _play_list.load_playlist()
         return _play_list
 
@@ -522,18 +497,17 @@ def playlist_play(args):
 
         ac.stop()
 
-        play_list.clear()
-        play_list.file_path = new_file_path
-        play_list.load_playlist()
-        _setup_playlist(play_list)
-        _setup_playlist_list(play_list.get_playlist_name())
+        play_list.playlist = Playlist.get_playlist(new_file_path)
+        play_list.playlist.load_playlist()
+        _setup_playlist(play_list.playlist)
+        _setup_playlist_list(play_list.playlist.get_playlist_name())
         return play_list
 
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
 
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
-    dlna_service = DLNAService(ac, playlist_accessor=_get_playlist_list, switch_playlist=_playlist_selected, current_playlist=lambda: play_list)
+    dlna_service = DLNAService(ac, playlist_accessor=_get_playlist_list, switch_playlist=lambda: _playlist_selected().playlist, current_playlist=lambda: play_list.playlist)
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
     player.webcontrol_url = web_root.get_player_page_url()
@@ -561,8 +535,8 @@ def playlist_play(args):
             ac.current_idx = selected_index
             ac.play()
         else:
-            play_list.load_playlist()
-            _setup_playlist(play_list)
+            play_list.playlist.load_playlist()
+            _setup_playlist(play_list.playlist)
             ac.play()
 
     def _update_list_ui(current_index):
@@ -604,20 +578,20 @@ def playlist_play(args):
 
     # 设置播放列表中当前视频的索引
     def _update_playlist_index(current_index):
-        play_list.current_index = current_index
-        play_list._current_pos = 0
-        play_list.save_playlist(force=True)
+        play_list.playlist.current_index = current_index
+        play_list.playlist._current_pos = 0
+        play_list.playlist.save_playlist(force=True)
 
     # 设置播放列表中当前视频的播放位置
     def _update_playlist_video_position(o_position, n_position):
-        play_list.current_pos = n_position
-        play_list.save_playlist()
+        play_list.playlist.current_pos = n_position
+        play_list.playlist.save_playlist()
 
     # 使用新的索引和播放位置强制保存播放列表
     def _save_playlist(current_index, current_position):
-        play_list.current_index = current_index
-        play_list.current_pos = current_position
-        play_list.save_playlist(force=True)
+        play_list.playlist.current_index = current_index
+        play_list.playlist.current_pos = current_position
+        play_list.playlist.save_playlist(force=True)
 
     # 根据播放列表配置跳过片头
     def _skip_head(current_index):
@@ -633,21 +607,21 @@ def playlist_play(args):
             if position_in_playlist['current_pos'] > ac.current_video_position:
                 time_str = format_time(position_in_playlist['current_pos'])
                 ac.device.seek(time_str)
-                play_list.current_pos = position_in_playlist['current_pos']
-                play_list.save_playlist(force=True)
+                play_list.playlist.current_pos = position_in_playlist['current_pos']
+                play_list.playlist.save_playlist(force=True)
                 position_in_playlist['current_pos'] = -1
-        elif play_list.skip_head > 0:
+        elif play_list.playlist.skip_head > 0:
             time.sleep(0.5)
-            time_str = format_time(play_list.skip_head)
+            time_str = format_time(play_list.playlist.skip_head)
             ac.device.seek(time_str)
-            play_list.current_pos = play_list.skip_head
-            play_list.save_playlist(force=True)
+            play_list.playlist.current_pos = play_list.playlist.skip_head
+            play_list.playlist.save_playlist(force=True)
 
     # 根据播放列表配置跳过片尾
     def _skip_tail(o_position, n_position):
-        if play_list.skip_tail == 0:
+        if play_list.playlist.skip_tail == 0:
             return
-        end = ac.get_max_video_position() - play_list.skip_tail
+        end = ac.get_max_video_position() - play_list.playlist.skip_tail
         if n_position >= end and end > 0:
             ac.play_next()
 
@@ -689,9 +663,9 @@ def playlist_play(args):
         try:
             while True:
                 if ac.end or not player.app.is_running:
-                    play_list.current_pos = ac.current_video_position
-                    play_list.current_index = ac.current_idx
-                    play_list.save_playlist(force=True)
+                    play_list.playlist.current_pos = ac.current_video_position
+                    play_list.playlist.current_index = ac.current_idx
+                    play_list.playlist.save_playlist(force=True)
                     break
                 time.sleep(0.5)
 
@@ -707,7 +681,7 @@ def playlist_refresh(args):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
-    play_list = Playlist(play_list_file)
+    play_list = LocalFilePlaylist(play_list_file)
     play_list.load_playlist()
     play_list.refresh_playlist()
     print(f'播放列表{args.name}刷新完成')
@@ -719,7 +693,7 @@ def playlist_update(args):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
-    play_list = Playlist(play_list_file)
+    play_list = LocalFilePlaylist(play_list_file)
     play_list.load_playlist()
 
     if args.skip_head > -1:
@@ -740,7 +714,7 @@ def playlist_view(args):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
-    play_list = Playlist(play_list_file)
+    play_list = LocalFilePlaylist(play_list_file)
     play_list.load_playlist()
 
     editor = PlayListEditor(play_list)

@@ -151,7 +151,7 @@ class DLNAService(DefaultResource):
                 old_path = playlist_path
 
         playlist = self._switch_playlist([old_path, old_name], [new_path, new_name])
-        file_name_list = [os.path.split(f)[1] for f in playlist.file_list]
+        file_name_list = [os.path.split(f)[1] for f in playlist.media_list]
         video_idx = playlist.current_index
         return json.dumps({
             "index": video_idx,

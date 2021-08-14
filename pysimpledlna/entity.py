@@ -9,122 +9,104 @@ from typing import List, Dict, Union
 
 class Playlist:
 
-    def __init__(self, file_path, filter: str = None, input: List[str] = None, min_save_interval=30):
-        self.file_path = file_path
+    def __init__(self, file_path: str, _type: str, _filter: str = None, min_save_interval=30):
         self._current_index = 0
-        self._current_file_path = None
+        self._current_media_path = None
         self._current_pos = 0
-        self._file_list = []
-        self.min_save_interval = min_save_interval
-        self.last_save = 0
+        self._media_list = []
         self._skip_head = 0
         self._skip_tail = 0
-        self._filter = filter
-        self._input = input
+        self._min_save_interval = 30
+        self._last_save = 0
+        self._filter = _filter
+        self._type = _type
 
-    def get_playlist_name(self):
-        return Path(self.file_path).stem
+        self._jso = None
+        self.file_path = file_path
+
+    @staticmethod
+    def get_playlist(file_path: str):
+        with open(file_path, 'r', encoding="utf-8-sig") as f:
+            jso = json.loads(f.read())
+            _type = jso.get('type')
+            playlist = None
+            if type == 'LocalFile':
+                playlist = LocalFilePlaylist(file_path)
+            elif type == 'LocalTempFile':
+                playlist = LocalTempFilePlaylist(file_path)
+            else:
+                playlist = LocalFilePlaylist(file_path)
+                playlist._type = 'LocalFile'
+            playlist.load_playlist()
+            return playlist
+
+    def can_save(self):
+        current = time.time()
+        interval = current - self._last_save
+        return interval >= self._min_save_interval
+
+    def get_playlist_data(self):
+        return {
+                'type': self._type,
+                "current_index": self._current_index,
+                "current_pos": self._current_pos,
+                "file_list": self._media_list,
+                "skip_head": self._skip_head,
+                "skip_tail": self._skip_tail,
+                "filter": self._filter,
+            }
+
+    def save_playlist_dict(self, data: dict):
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        with open(self.file_path, 'w', encoding="utf-8") as fp:
+            fp.write(json_str)
+        self._last_save = time.time()
 
     def clear(self):
         self._current_index = 0
-        self._current_file_path = None
+        self._current_media_path = None
         self._current_pos = 0
-        self._file_list = []
+        self._media_list = []
         self._skip_head = 0
         self._skip_tail = 0
         self._filter = '*'
+        self._last_save = 0
 
-        self.last_save = 0
-
-    def filter_files(self):
-
-        self._file_list.clear()
-
-        if self._filter is not None:
-            regex = fnmatch.translate(self._filter)
-            pattern = re.compile(regex)
-
-        filter_str = self._filter if self._filter is not None else '*'
-
-        for input_dir in self._input:
-            input_dir_path = Path(input_dir)
-            self._file_list += [ str(fpath) for fpath in input_dir_path.glob(filter_str) if fpath.is_file()]
+        self._jso = None
 
     def load_playlist(self):
         self.clear()
         if not os.path.isfile(self.file_path):
             return
-        jo = None
         with open(self.file_path, 'r', encoding="utf-8-sig") as f:
-            jo = json.loads(f.read())
-        if jo.get('file_list') is not None:
-            self._file_list = jo.get('file_list')
-        if jo.get('current_index') is not None:
-            self._current_index = int(jo.get('current_index'))
-            self._current_file_path = self._file_list[self._current_index]
-        if jo.get('current_pos') is not None:
-            self._current_pos = int(jo.get('current_pos'))
-        if jo.get('skip_head') is not None:
-            self._skip_head = jo.get('skip_head')
-        if jo.get('skip_tail') is not None:
-            self._skip_tail = jo.get('skip_tail')
-        if jo.get('filter') is not None:
-            self._filter = jo.get('filter')
+            self._jso = json.loads(f.read())
+        if self._jso.get('file_list') is not None:
+            self._media_list = self._jso.get('file_list')
+        if self._jso.get('current_index') is not None:
+            self._current_index = int(self._jso.get('current_index'))
+            self._current_media_path = self._media_list[self._current_index]
+        if self._jso.get('current_pos') is not None:
+            self._current_pos = int(self._jso.get('current_pos'))
+        if self._jso.get('skip_head') is not None:
+            self._skip_head = self._jso.get('skip_head')
+        if self._jso.get('skip_tail') is not None:
+            self._skip_tail = self._jso.get('skip_tail')
+        if self._jso.get('filter') is not None:
+            self._filter = self._jso.get('filter')
+        if self._jso.get('type') is not None:
+            self._type = self._jso.get('type')
         else:
             self._filter = "*"
 
-        self._input: List[str] = []
-        input_dirs = jo.get('input')
-        if input_dirs is None:
-            if len(self._file_list) > 0:
-                input_dirs = [str(Path(self._file_list[0]).parent)]
-
-        for input_dir in input_dirs:
-            input_dir_path = Path(input_dir)
-            if input_dir_path.exists() and input_dir_path.is_dir():
-                self._input.append(str(input_dir_path))
-
     def save_playlist(self, force=False):
-        current = time.time()
-        interval = current - self.last_save
-        if force or interval >= self.min_save_interval:
-            json_str = json.dumps({
-                "current_index": self._current_index,
-                "current_pos": self._current_pos,
-                "file_list": self._file_list,
-                "skip_head": self._skip_head,
-                "skip_tail": self._skip_tail,
-                "filter": self._filter,
-                "input": self._input,
-            }, ensure_ascii=False, indent=2)
-            with open(self.file_path, 'w', encoding="utf-8") as fp:
-                fp.write(json_str)
-            self.last_save = current
+        pass
 
     def refresh_playlist(self):
-        if self._input is None:
-            return
-
-        current_file = self._file_list[self._current_index]
-
-        self.filter_files()
-
-        self._current_index = 0
-
-        for i, f in enumerate(self._file_list):
-            if os.path.exists(current_file) and os.path.samefile(f, current_file):
-                self._current_index = i
-                break
-
-        # 刷新后没有找到当前的文件，位置信息也需要清0
-        if self._current_index == 0:
-            self._current_pos = 0
-
-        self.save_playlist(force=True)
+        pass
 
     @property
     def current_file_path(self):
-        return self._current_file_path
+        return self._current_media_path
 
     @property
     def current_index(self):
@@ -133,7 +115,7 @@ class Playlist:
     @current_index.setter
     def current_index(self, current_index):
         self._current_index = current_index
-        self._current_file_path = self._file_list[self._current_index]
+        self._current_media_path = self._media_list[self._current_index]
 
     @property
     def current_pos(self):
@@ -144,12 +126,12 @@ class Playlist:
         self._current_pos = current_pos
 
     @property
-    def file_list(self):
-        return self._file_list
+    def media_list(self):
+        return self._media_list
 
-    @file_list.setter
-    def file_list(self, file_list):
-        self._file_list = file_list
+    @media_list.setter
+    def media_list(self, media_list):
+        self._media_list = media_list
 
     @property
     def skip_head(self):
@@ -166,6 +148,95 @@ class Playlist:
     @skip_tail.setter
     def skip_tail(self, skip_tail):
         self._skip_tail = skip_tail
+
+
+class LocalFilePlaylist(Playlist):
+
+    def __init__(self, file_path: str, _filter: str = None, input: List[str] = None, min_save_interval=30):
+        Playlist.__init__(self, file_path, 'LocalFile', _filter, min_save_interval)
+        self._input = input
+
+    def get_playlist_name(self):
+        return Path(self.file_path).stem
+
+    def clear(self):
+        super().clear()
+        self._input = []
+
+    def filter_files(self):
+
+        self._media_list.clear()
+
+        if self._filter is not None:
+            regex = fnmatch.translate(self._filter)
+            pattern = re.compile(regex)
+
+        filter_str = self._filter if self._filter is not None else '*'
+
+        for input_dir in self._input:
+            input_dir_path = Path(input_dir)
+            self._media_list += [str(fpath) for fpath in input_dir_path.glob(filter_str) if fpath.is_file()]
+
+    def load_playlist(self):
+        super().load_playlist()
+        self._input: List[str] = []
+        input_dirs = self._jso.get('input')
+        if input_dirs is None:
+            if len(self._media_list) > 0:
+                input_dirs = [str(Path(self._media_list[0]).parent)]
+
+        for input_dir in input_dirs:
+            input_dir_path = Path(input_dir)
+            if input_dir_path.exists() and input_dir_path.is_dir():
+                self._input.append(str(input_dir_path))
+
+    def save_playlist(self, force=False):
+        if force or self.can_save():
+            data = self.get_playlist_data()
+            data.update({
+                "input": self._input,
+            })
+            self.save_playlist_dict(data)
+
+    def refresh_playlist(self):
+        if self._input is None:
+            return
+
+        current_file = self._media_list[self._current_index]
+
+        self.filter_files()
+
+        self._current_index = 0
+
+        for i, f in enumerate(self._media_list):
+            if os.path.exists(current_file) and os.path.samefile(f, current_file):
+                self._current_index = i
+                break
+
+        # 刷新后没有找到当前的文件，位置信息也需要清0
+        if self._current_index == 0:
+            self._current_pos = 0
+
+        self.save_playlist(force=True)
+
+
+class LocalTempFilePlaylist(LocalFilePlaylist):
+
+    def __init__(self, file_path: str):
+        super().__init__(file_path, None, [], 30)
+        self._type = 'LocalTempFile'
+
+    def refresh_playlist(self):
+        pass
+
+    def filter_files(self):
+        pass
+
+
+class PlayListWrapper(Playlist):
+
+    def __init__(self):
+        self.playlist = None
 
 
 class Settings:

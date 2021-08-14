@@ -40,7 +40,8 @@ from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, 
 from typing import Optional, Sequence, Tuple
 import logging
 
-from pysimpledlna.entity import Playlist
+from pysimpledlna.entity import LocalFilePlaylist
+
 
 class PlayListPlayer(Progress):
 
@@ -70,7 +71,7 @@ class PlayListPlayer(Progress):
             ]
 
         if bottom_toolbar is None:
-            bottom_toolbar = HTML('<b>[q]</b>退出<b>[p]</b>暂停<b>[b]</b>选择播放列表<b>[n]</b>选择文件<b>[m]</b>进度控制')
+            bottom_toolbar = HTML('[q]退出[p]暂停[b]选择播放列表[n]选择文件[m]进度控制')
 
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.bottom_part = None
@@ -552,8 +553,8 @@ class VideoFileFormatter(VideoBaseFormatter):
 
 class PlayListEditor:
     
-    def __init__(self, playlist: Playlist, editable=False) -> None:
-        self.playlist: Playlist = playlist
+    def __init__(self, playlist: LocalFilePlaylist, editable=False) -> None:
+        self.playlist: LocalFilePlaylist = playlist
         self.editable = False
         self.text_field = None
         self.application = None
@@ -658,7 +659,7 @@ class PlayListEditor:
 
     def create_property_editor(self):
 
-        current_file_path = self.playlist.file_list[self.playlist.current_index]
+        current_file_path = self.playlist.media_list[self.playlist.current_index]
         _, current_file_name = os.path.split(current_file_path)
 
         self.play_info_dialog = Dialog(modal=False, title="播放记录", body=HSplit([
@@ -695,7 +696,7 @@ class PlayListEditor:
     def create_text_editor(self):
         search_toolbar = SearchToolbar()
         text = ''
-        for file_path in self.playlist.file_list:
+        for file_path in self.playlist.media_list:
             text += file_path + '\n'
         self.text_field = TextArea(
             text=text,
