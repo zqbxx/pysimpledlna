@@ -5,6 +5,9 @@ pysimpledlna
 ------
 一个dlna投屏工具
 
+![console](docs/images/console01.jpg "console")
+![web-controller](docs/images/web01.jpg "web controller")
+![web-video-list](docs/images/web02.jpg "playlist")
 
 说明
 ------

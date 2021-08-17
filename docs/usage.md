@@ -1,5 +1,7 @@
-使用说明
-------
+# 使用说明
+
+## 命令行使用
+
 所有的命令都支持`-h`查看详细帮助详细
 1. 查找DLNA设备
 ```bash
@@ -89,8 +91,21 @@ pysimpledlna config -u http://192.168.199.151:1901/ -es True
 -p    显示配置文件内容
 ```
 
-启用SSL
-------
+### 交互模式
+打开命令行窗口，直接输入`pysimpledlna`进入交互模式。交互模式下，播放视频功能将会启动新进程进行播放。
+
+
+## 手机访问
+在手机浏览器上输入命令行界面显示的地址
+![console](images/console02.jpg "console")
+
+进入web界面
+
+![web-controller](images/web01.jpg "web controller")
+![web-video-list](images/web02.jpg "playlist")
+
+
+## 启用SSL
 DLNA规范文件中没有提到SSL，部分DLNA播放器不支持这个功能。Kodi不支持自签名的证书以及域名与证书不匹配的情况。乐播投屏支持SSL。
 
 1. 安装openssl
@@ -106,18 +121,19 @@ openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt 
 3. 启用ssl支持
 <br/>参考 `使用说明` -> `设置默认值`
 
-Windows右键支持
-------
-1. 安装右键菜单
+## ~~Windows右键支持~~
+
+1. ~~安装右键菜单~~
 ```
 pysimpledlnaW install
 ```
 
-2. 删除右键菜单
+2. ~~删除右键菜单~~
 ```
 pysimpledlnaW uninstall
 ```
-3. 播放视频
+3. ~~播放视频~~
 ```
 在包含mp4, mkv文件的目录上右键 -> DLNA Share，程序自动选择第一台DLNA设备播放目录中的视频
 ```
+## web访问

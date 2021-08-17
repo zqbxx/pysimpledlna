@@ -25,7 +25,7 @@ pip install -r ./pysimpledlna/requirements_app.txt
             ```
             将编译完成的`bottle.*.pyd`和`prompt_toolkit.*.pyd`复制到`./pysimpledlna/complie`目录
    - 编译pysimpledlna<br/>
-       打开git bahs，进入`./pysimpledlna/complie`目录
+       打开git bash，进入`./pysimpledlna/complie`目录
         ```bash
         ./complie.sh
         ```
