@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, List, Tuple
 
 from bottle import request, static_file, abort, HTTPResponse
-from pysimpledlna.entity import Playlist
+from pysimpledlna.entity import Playlist, PlayListWrapper
 
 from pysimpledlna.ac import ActionController
 from pysimpledlna.dlna import DefaultResource
@@ -68,15 +68,17 @@ class DLNAService(DefaultResource):
 
     def __init__(self,
                  ac: ActionController,
+                 play_list: PlayListWrapper,
                  playlist_accessor: Callable[[], List[Tuple[str, str]]],
-                 switch_playlist: Callable[[List[str], List[str]], Playlist],
-                 current_playlist: Callable[[], Playlist]) -> None:
+                 switch_playlist: Callable[[List[str], List[str]], None],
+                 switch_video: Callable[[List[str], List[str]], None]) -> None:
         super().__init__(f'/api/{ac.device.device_key}', method=['GET', 'POST'])
         self.ac = ac
         self.render = self.render_request
         self._playlist_accessor = playlist_accessor
         self._switch_playlist = switch_playlist
-        self._current_playlist = current_playlist
+        self._play_list = play_list
+        self._switch_video = switch_video
 
     def render_request(self):
         request_command = request.params.get('command')
@@ -116,22 +118,22 @@ class DLNAService(DefaultResource):
     def index(self):
         index = int(request.params.get('index'))
         video_name = request.params.get('name').encode('iso8859-1').decode('utf-8')
-        is_same_file_name = Path(self.ac.local_file_path).name == video_name
-        current_status = ''
-        if index == -1:
-            self.ac.stop()
-            current_status = 'Stop'
-        elif index == self.ac.current_idx and is_same_file_name:
-            self.ac.resume()
-            current_status = self.ac.player.player_status.value
+        is_same_file_name = Path(self.ac.local_file_path).name == video_name and self._play_list.is_sync()
+
+        if not self._play_list.is_sync():
+            self._switch_video([self._play_list.playlist.media_list[self.ac.current_idx], ''], [self._play_list.playlist_view[index], ''])
         else:
-            self.ac.current_idx = index
-            self.ac.play()
-            current_status = self.ac.player.player_status.value
-        ret_obj = {
-            'index': self.ac.current_idx,
-            'current_status': current_status
-        }
+            if index == -1:
+                self.ac.stop()
+            elif index == self.ac.current_idx and is_same_file_name:
+                self.ac.resume()
+            else:
+                self.ac.current_idx = index
+                self.ac.play()
+
+        ret_obj = {}
+        ret_obj.update(self._create_view_playlist_data())
+        ret_obj.update(self._create_dlna_player_data())
         return json.dumps(ret_obj, indent=2).encode('utf-8')
 
     def switch_playlist(self):
@@ -150,44 +152,16 @@ class DLNAService(DefaultResource):
             if playlist_name == old_name:
                 old_path = playlist_path
 
-        playlist = self._switch_playlist([old_path, old_name], [new_path, new_name])
-        file_name_list = [os.path.split(f)[1] for f in playlist.media_list]
-        video_idx = playlist.current_index
-        return json.dumps({
-            "index": video_idx,
-            "file_name_list": file_name_list
-        }, indent=2).encode('utf-8')
+        self._switch_playlist([old_path, old_name], [new_path, new_name])
+        ret_obj = self._create_view_playlist_data()
+        return json.dumps(ret_obj, indent=2).encode('utf-8')
 
     def get_all_playlist(self):
         playlist_list = [p[1] for p in self._playlist_accessor()]
         return json.dumps(playlist_list, indent=2).encode('utf-8')
 
     def get_dlna_status(self):
-        video_pos = self.ac.current_video_position
-        video_dur = self.ac.current_video_duration
-        video_idx = self.ac.current_idx
-        #video_file_path = Path(self.ac.file_list[video_idx])
-        #video_file_name = video_file_path.name
-        video_file_path = Path(self.ac.local_file_path)
-        video_file_name = video_file_path.name
-        current_status = self.ac.player.player_status.value
-        file_name_list = [Path(f).name for f in self.ac.file_list]
-
-        current_playlist = self._current_playlist()
-        current_playlist_path = current_playlist.file_path
-
-        ret_obj = {
-            'position': video_pos,
-            'duration': video_dur,
-            'playing_file_name': video_file_name,
-            'playing_file_path': str(video_file_path.absolute()),
-            'current_status': current_status,
-            'index_in_playlist': video_idx,
-            'file_name_list': file_name_list,
-            'current_playlist_name': Path(current_playlist_path).stem,
-            'is_occupied': self.ac.is_occupied
-        }
-
+        ret_obj = self._create_all_data()
         return json.dumps(ret_obj, indent=2).encode('utf-8')
 
     def playAtApp(self):
@@ -196,3 +170,55 @@ class DLNAService(DefaultResource):
     def current_video_file(self):
         file_path = Path(self.ac.local_file_path)
         return static_file(file_path.name, root=str(file_path.parent))
+
+    def _create_current_playlist_data(self):
+        return {
+                    'currentPlaylist': {
+                        'name': self._play_list.playlist.get_playlist_name(),
+                        'index': self.ac.current_idx,
+                    }
+                }
+
+    def _create_current_video_data(self):
+        video_file_path = Path(self.ac.local_file_path)
+        return {
+                    'currentVideo': {
+                        'path': str(video_file_path.absolute()),
+                        'name': video_file_path.name,
+                        'position': self.ac.current_video_position,
+                        'duration': self.ac.current_video_duration,
+                    }
+                }
+
+    def _create_dlna_player_data(self):
+        return {
+                    'dlnaPlayer': {
+                        'occupied': self.ac.is_occupied,
+                        'status': self.ac.player.player_status.value,
+                    }
+                }
+
+    def _create_view_playlist_data(self):
+        view_playlist = self._play_list.playlist_view.playlist
+        current_index = view_playlist.current_index
+        if self._play_list.is_sync():
+            # 当视图显示的播放列表和播放使用的播放列表同步时，使用播放使用的播放列表的播放位置
+            current_index = self.ac.current_idx
+        return {
+                    'viewPlaylist': {
+                        'name': view_playlist.get_playlist_name(),
+                        'index': current_index,
+                        'position': view_playlist.current_pos,
+                        'videoList': [Path(f).name for f in self.ac.play_list.playlist_view]
+                    }
+                }
+
+    def _create_all_data(self):
+        result = {}
+        func_array = [self._create_current_playlist_data,
+                      self._create_current_video_data,
+                      self._create_dlna_player_data,
+                      self._create_view_playlist_data]
+        for func in func_array:
+            result.update(func())
+        return result

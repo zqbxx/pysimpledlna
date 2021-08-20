@@ -3,8 +3,9 @@ import json
 import os
 import re
 import time
+from copy import deepcopy
 from pathlib import Path
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple, Sequence, Iterator, Any
 
 
 class Playlist:
@@ -23,6 +24,15 @@ class Playlist:
 
         self._jso = None
         self.file_path = file_path
+
+    def save_playlist(self, force=False):
+        pass
+
+    def refresh_playlist(self):
+        pass
+
+    def get_playlist_name(self):
+        pass
 
     @staticmethod
     def get_playlist(file_path: str):
@@ -97,12 +107,6 @@ class Playlist:
             self._type = self._jso.get('type')
         else:
             self._filter = "*"
-
-    def save_playlist(self, force=False):
-        pass
-
-    def refresh_playlist(self):
-        pass
 
     @property
     def current_file_path(self):
@@ -233,10 +237,68 @@ class LocalTempFilePlaylist(LocalFilePlaylist):
         pass
 
 
-class PlayListWrapper(Playlist):
+class PlayListWrapper:
 
     def __init__(self):
-        self.playlist = None
+        self.playlist: Playlist = None
+        self.playlist_player_view: PlaylistPlayerVO = PlaylistPlayerVO()
+        self.playlist_view: PlaylistVO = PlaylistVO()
+        self.playlist_init_position = -1  #: 播放列表文件中播放进度
+        self.playlist_init_index = -1  #: 播放列表文件中播放的视频位置
+
+    def is_sync(self):
+        return self.playlist.get_playlist_name() == self.playlist_view.playlist.get_playlist_name()
+
+    def set_playlist(self, playlist: Playlist):
+        self.playlist = playlist
+
+    def set_vo(self, playlist: Playlist):
+        deepcopy_playlist = deepcopy(playlist)
+        self.playlist_view.playlist = deepcopy_playlist
+        self.playlist_player_view.playlist = deepcopy_playlist
+
+    def get_view_playlist_path(self):
+        return self.playlist_view.playlist.file_path
+
+
+class PlaylistVO(Sequence):
+
+    def __init__(self):
+        self.playlist: Playlist = None
+
+    def __len__(self):
+        if self.playlist is None:
+            return 0
+        return len(self.playlist.media_list)
+
+    def __getitem__(self, key):
+        file_path = self.playlist.media_list[key]
+        return file_path
+
+    def index(self, x: Any, start: int = ..., end: int = ...) -> int:
+        return self.playlist.media_list.index(start, end)
+
+    def count(self, x) -> int:
+        return self.playlist.media_list.count()
+
+    def __contains__(self, x) -> bool:
+        return self.playlist.media_list.__contains__(x)
+
+    def __iter__(self) -> Iterator:
+        return self.playlist.media_list.__iter__()
+
+    def __reversed__(self) -> Iterator:
+        return self.playlist.media_list.__reversed__()
+
+
+class PlaylistPlayerVO(PlaylistVO):
+
+    def __getitem__(self, key):
+        file_path = self.playlist.media_list[key]
+        return file_path, os.path.split(file_path)[1]
+
+    def __iter__(self) -> Iterator:
+        return [(f, os.path.split(f)[1]) for f in self.playlist.media_list].__iter__()
 
 
 class Settings:

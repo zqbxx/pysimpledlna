@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 
 from pysimpledlna import Device
+from pysimpledlna.entity import PlayListWrapper
 from pysimpledlna.ui.terminal import Player, PlayerStatus
 from pysimpledlna.utils import wait_interval, format_time
 from prompt_toolkit_ext.event import Event
@@ -22,9 +23,10 @@ class ActionController:
     '''
     自己实现连续播放多个文件的功能，部分DLNA设备没有实现用于连续播放的接口
     '''
-    def __init__(self, file_list: List[str], device: Device, player=Player()):
+    def __init__(self, play_list: PlayListWrapper, device: Device, player=Player()):
         self.current_idx = 0
-        self.file_list: List[str] = file_list
+        #self.file_list: List[str] = file_list
+        self.play_list: PlayListWrapper = play_list
         self.device = device
 
         self.current_video_position = 0
@@ -88,7 +90,7 @@ class ActionController:
                     # 只对播放文件末尾时间进行处理
                     wait_interval(self.current_video_duration, 0, self.current_video_position)
 
-                    if self.current_idx < len(self.file_list):
+                    if self.current_idx < len(self.play_list.playlist.media_list):
                         logger.debug('play next video')
                         self.play_next()
                     else:
@@ -171,7 +173,7 @@ class ActionController:
 
         self.player.new_player()
 
-        self.local_file_path = self.file_list[self.current_idx]
+        self.local_file_path = self.play_list.playlist.media_list[self.current_idx]
         self.player.video_file = self.local_file_path
         self.player.duration = 0
         self.player.cur_pos = 0
@@ -222,16 +224,16 @@ class ActionController:
 
     def validate_current_index(self):
         logger.debug(f'current_index: {self.current_idx}')
-        if self.current_idx >= len(self.file_list):
-            self.current_idx = len(self.file_list) - 1
+        if self.current_idx >= len(self.play_list.playlist.media_list):
+            self.current_idx = len(self.play_list.playlist.media_list) - 1
             return False
 
         if self.current_idx < 0:
             self.current_idx = 0
             return False
 
-        while self.current_idx < len(self.file_list):
-            file_path = Path(self.file_list[self.current_idx])
+        while self.current_idx < len(self.play_list.playlist.media_list):
+            file_path = Path(self.play_list.playlist.media_list[self.current_idx])
             if file_path.exists() and file_path.is_file():
                 return True
             logger.debug(f'current index: {self.current_idx}, file {str(file_path.absolute())} does not exists')

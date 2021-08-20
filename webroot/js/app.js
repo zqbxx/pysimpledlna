@@ -1,24 +1,17 @@
 mui.init();
 mui.ready(function() {
-
-    //let userPicker = new mui.PopPicker();
     
     device_key = '{device_key}';
     
     let global = {
-        currentSelectedIndex: 0,
-        currentStatus: 'Play',
-        currentPosition: 0,
-        playingFileName: '',
-        playingFilePath: '',
-        videoDuration: 0,
         apiUrl: '../api/' + device_key,
         isSeeking: false,
-        currentPlaylistName: '',
-        playlistFileNameList: [],
-        isOccupied: undefined,
         chimee: undefined,
         isLocal: false,
+        currentPlaylist: { name: '', index: -1, },
+        currentVideo: { path: '', name: '', position: -1, duration: -1, },
+        dlnaPlayer: { occupied: false, status: "", },
+        viewPlaylist: { name: '', index: -1, position: -1, videoList: [], },
     };
 
     let playListPicker = new mui.PopPicker();
@@ -31,57 +24,33 @@ mui.ready(function() {
         .attr('value', 0)
         .attr('animationDuration', 0)
         .attr('textFormat', function(value, max) {
-            if(global.currentStatus == 'Play') {
+            if(global.dlnaPlayer.status == 'Play') {
                 return '&#xf04c';
-			} else if (global.currentStatus == 'Pause' || global.currentStatus == 'Stop') {
+			} else if (global.dlnaPlayer.status == 'Pause' || global.dlnaPlayer.status == 'Stop') {
 				return '&#xf04b';
 			}
+			return '&#xf04b';
 		});
 
 	mui('#circle-progress-wrapper').on('click', '.circle-progress-content', function(){
-		if(global.currentStatus == 'Play') {
-			global.currentStatus = 'Pause';
+		if(global.dlnaPlayer.status == 'Play') {
+			global.dlnaPlayer.status = 'Pause';
 			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){});
-		} else if (global.currentStatus == 'Pause') {
-		    global.currentStatus = 'Play';
+		} else if (global.dlnaPlayer.status == 'Pause') {
+		    global.dlnaPlayer.status = 'Play';
 		    mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){});
-		} else if (global.currentStatus = 'Stop') {
-            ele = document.querySelector('#video-file-list button.mui-btn-danger')
-            if (ele != null) {
-                if (hasClass(ele, 'fa-play')) {
-                    mui.getJSON(global.apiUrl,
+		} else if (global.dlnaPlayer.status = 'Stop') {
+            mui.getJSON(global.apiUrl,
                         {
                             command:'index',
                             r: '' +new Date().getTime(),
-                            index: ele.getAttribute('videoIndex'),
-                            name: ele.getAttribute('videoName')
+                            index: global.currentPlaylist.index,
+                            name: global.currentVideo.name,
                         },
-                        function(data){
-
-                        }
+                        function(data){}
                     );
-                }
-
-            }
         }
 	})
-
-    // 视频选择
-	/*var showUserPickerButton = document.getElementById('select-video');
-	showUserPickerButton.addEventListener('tap', function(event) {
-		userPicker.pickers[0].setSelectedIndex(currentSelectedIndex, 1000)
-		userPicker.show(function(items) {
-		    userSelectIndex = parseInt(items[0].value)
-            mui.getJSON(api_url,{command:'index', index: userSelectIndex, r: '' +new Date().getTime()},function(data){
-                    console.log(data);
-                    showUserPickerButton.innerText = items[0].text;
-                }
-            );
-
-			//返回 false 可以阻止选择框的关闭
-			//return false;
-		});
-	}, false);*/
 
     //屏幕常亮
     var lightVideo = document.getElementById('light');
@@ -96,7 +65,6 @@ mui.ready(function() {
 	    }
 	});
 
-
     //进度跳转
     let offset = 0
     function updateSeekInfo(t) {
@@ -106,8 +74,8 @@ mui.ready(function() {
         }
         document.getElementById('timeOffsetInfo').innerHTML =
           (t == 0 ? '' : formattedTime + '/')
-        +formatTime(global.currentPosition)
-        + (t == 0 ? '' : '(' + formatTime(global.currentPosition + t)  + ')');
+        +formatTime(global.currentVideo.position)
+        + (t == 0 ? '' : '(' + formatTime(global.currentVideo.position + t)  + ')');
     }
     updateSeekInfo(0);
     let seekBtnFunc = function() {
@@ -116,10 +84,10 @@ mui.ready(function() {
 	    }
         global.isSeeking = true
         offset += parseInt(this.getAttribute('timeOffset'));
-        if ((offset < 0) && (global.currentPosition + offset < 0) ) {
-            offset = -global.currentPosition;
-        } else if (offset + global.currentPosition > global.videoDuration) {
-            offset = global.videoDuration - global.currentPosition;
+        if ((offset < 0) && (global.currentVideo.position + offset < 0) ) {
+            offset = -global.currentVideo.position;
+        } else if (offset + global.currentVideo.position > global.currentVideo.duration) {
+            offset = global.currentVideo.duration - global.currentVideo.position;
         }
 		updateSeekInfo(offset);
 	};
@@ -146,7 +114,7 @@ mui.ready(function() {
     let startPos = 0
     let progressBar = document.getElementById('progressBar');
     let rangeSeekStartFunc = function(){
-        startPos = global.currentPosition;
+        startPos = global.currentVideo.position;
         global.isSeeking = true;
     }
 
@@ -168,7 +136,7 @@ mui.ready(function() {
 	};
 
 	progressBar.min = 0;
-	progressBar.max = global.videoDuration;
+	progressBar.max = global.currentVideo.duration;
 	progressBar.addEventListener('mousedown', rangeSeekStartFunc);
 	progressBar.addEventListener('touchstart', rangeSeekStartFunc);
 	progressBar.addEventListener('input', rangeSeekFunc);
@@ -184,31 +152,26 @@ mui.ready(function() {
 
                     if (!global.isSeeking) {
 
-                        playlist_changed = global.currentPlaylistName != data.current_playlist_name;
-                        current_video_changed = global.currentSelectedIndex != data.index;
-                        video_position_changed = global.currentPosition !=  data.position;
-                        player_status_changed = global.currentStatus != data.current_status;
-                        occupied_status_changed = global.isOccupied != data.is_occupied;
+                        playlist_changed = global.viewPlaylist.name != data.viewPlaylist.name;
+                        current_video_changed =global.currentVideo.path != data.currentVideo.path;
+                        video_position_changed = global.currentVideo.position != data.currentVideo.position;
+                        player_status_changed = global.dlnaPlayer.status != data.dlnaPlayer.status;
+                        occupied_status_changed = global.dlnaPlayer.occupied != data.dlnaPlayer.occupied;
+                        video_duration_changed = global.currentVideo.duration != data.currentVideo.duration;
 
-                        // 深拷贝
-                        let oldGlobal = Object.assign({}, global);
-                        oldGlobal.playlistFileNameList = global.playlistFileNameList.slice();
+                        let old = {};
+                        old.currentPlaylist = global.currentPlaylist;
+                        old.currentVideo = global.currentVideo;
+                        old.dlnaPlayer = global.dlnaPlayer;
+                        old.viewPlaylist = global.viewPlaylist;
 
-                        // 当前播放的视频状态
-                        global.currentPosition = data.position;
-                        global.videoDuration = data.duration;
-                        global.currentStatus = data.current_status;
-                        global.currentSelectedIndex = data.index_in_playlist;
-                        global.isOccupied = data.is_occupied;
-
-                        // 当前播放的播放列表状态
-                        global.playingFilePath = data.playing_file_path;
-                        global.playingFileName = data.playing_file_name;
-                        global.playlistFileNameList = data.file_name_list;
-                        global.currentPlaylistName = data.current_playlist_name;
+                        global.currentPlaylist = data.currentPlaylist;
+                        global.currentVideo = data.currentVideo;
+                        global.dlnaPlayer = data.dlnaPlayer;
+                        global.viewPlaylist = data.viewPlaylist;
 
                         if (player_status_changed) {
-                            if (global.currentStatus == 'Stop') {
+                            if (data.dlnaPlayer.status == 'Stop') {
                                 document.getElementById('stopVideo').disabled = true;
                             } else {
                                 document.getElementById('stopVideo').disabled = false;
@@ -217,38 +180,37 @@ mui.ready(function() {
 
                         if (occupied_status_changed || player_status_changed) {
                             let txtStatus = document.getElementById('playerStatus')
-                            if(global.isOccupied)
+                            if(data.dlnaPlayer.occupied)
                                 txtStatus.innerHTML = '投屏被占用';
-                            else if (global.currentStatus == 'Stop')
+                            else if (data.dlnaPlayer.status == 'Stop')
                                 txtStatus.innerHTML = '已停止投屏';
-                            else if (global.currentStatus == 'Pause')
+                            else if (data.dlnaPlayer.status == 'Pause')
                                 txtStatus.innerHTML = '投屏已暂停';
-                            else if (global.currentStatus == 'Play')
+                            else if (data.dlnaPlayer.status == 'Play')
                                 txtStatus.innerHTML = '正在播放';
                         }
-                        document.getElementById('currentFileName').innerHTML = global.playingFileName;
-                        //document.getElementById('current_file_time').innerHTML = data.position + '/' + data.duration;
-                        //mui('#video-progress-bar').progressbar().setProgress(Math.round(data.position/data.duration*100));
-                        circleProgress.attr({ value: data.position, });
+                        if (current_video_changed)
+                            document.getElementById('currentFileName').innerHTML = data.currentVideo.name;
 
                         if (playlist_changed) {
-                            document.getElementById('playlist-name').innerText = global.currentPlaylistName;
-                            createPlaylistVideos(data.file_name_list, data.index);
+                            document.getElementById('playlist-name').innerText = data.viewPlaylist.name;
+                            createPlaylistVideos(data.viewPlaylist.videoList, data.viewPlaylist.index);
                         }
 
-                        if (current_video_changed){
-                            circleProgress.attr({ max: data.duration, });
-                            progressBar.max = global.videoDuration;
+                        if (video_duration_changed || player_status_changed){
+                            circleProgress.attr({ max: data.currentVideo.duration, });
+                            progressBar.max = global.currentVideo.duration;
                         }
 
-                        if (video_position_changed) {
-                            progressBar.value = global.currentPosition;
-                            timeInfoText = formatTime(global.currentPosition) + '/' + formatTime(global.videoDuration);
+                        if (video_position_changed || player_status_changed) {
+                            circleProgress.attr({ value: data.currentVideo.position, });
+                            progressBar.value = data.currentVideo.position;
+                            timeInfoText = formatTime(data.currentVideo.position) + '/' + formatTime(data.currentVideo.duration);
                             document.getElementById('timeInfo').innerText = timeInfoText;
                             updateSeekInfo(0);
                         }
 
-                        if (current_video_changed || playlist_changed) {
+                        if (current_video_changed || playlist_changed || player_status_changed) {
                             updatePlaylistVideoStatus(data);
                         }
 
@@ -276,17 +238,17 @@ mui.ready(function() {
     }
 
     mui('#morePlaylist')[0].addEventListener('tap', function(){
-		playListPicker.pickers[0].setSelectedValue(global.currentPlaylistName, 1000)
+		playListPicker.pickers[0].setSelectedValue(global.viewPlaylist.name, 1000)
 		playListPicker.show(function(items) {
 		    selectedPlaylistName = items[0].value
-		    if (selectedPlaylistName == global.currentPlaylistName) {
+		    if (selectedPlaylistName == global.viewPlaylist.name) {
 		        return
 		    }
 		    mask.show();
 		    mui.getJSON(global.apiUrl,{command:'switchPlayList', o: '', n: selectedPlaylistName, r: '' +new Date().getTime()},function(data){
-		            global.currentPlaylistName = selectedPlaylistName;
-		            document.getElementById('playlist-name').innerText = global.currentPlaylistName;
-		            createPlaylistVideos(data.file_name_list, data.index);
+		            global.viewPlaylist = data.viewPlaylist;
+		            document.getElementById('playlist-name').innerText = global.viewPlaylist.name;
+		            createPlaylistVideos(global.viewPlaylist.videoList, global.viewPlaylist.index);
                     mui.later(function(){
 						mask.close();
 					}, 300);
@@ -353,7 +315,7 @@ mui.ready(function() {
             global.chimee.on('timeupdate', function(){
                 if (flag == -1 && global.chimee.currentTime > 0.3) {
                     flag = 1;
-                    global.chimee.currentTime = global.currentPosition - 3;
+                    global.chimee.currentTime = global.currentVideo.position - 3;
                 }
 			});
 			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){
@@ -389,13 +351,7 @@ mui.ready(function() {
             spanName.innerHTML = file_name_list[i];
             let btn = document.createElement('button');
             btn.setAttribute('videoName', file_name_list[i])
-
-            if (index == i){
-                btn.className = 'mui-btn fa';
-            } else {
-                btn.className = 'mui-btn fa';
-            }
-
+            btn.className = 'mui-btn fa';
             btn.setAttribute('videoIndex', "" + i)
 
             li.appendChild(spanName);
@@ -424,19 +380,22 @@ mui.ready(function() {
     }
 
     function updatePlaylistVideoStatus(data) {
-        if (data.index)
-            global.currentSelectedIndex = data.index;
-        if (data.current_status)
-            global.currentStatus = data.current_status;
+        if (data.viewPlaylist && data.viewPlaylist.index)
+            global.viewPlaylist.index = data.viewPlaylist.index;
+        if (data.dlnaPlayer && data.dlnaPlayer.status)
+            global.dlnaPlayer.status = data.dlnaPlayer.status;
         let btnArray = document.querySelectorAll('#video-file-list button');
         for (let j = 0 ; j < btnArray.length ; j++ ) {
-            if ( j != global.currentSelectedIndex ) {
+            if ( j != global.viewPlaylist.index ) {
                 btnArray[j].classList.remove('fa-stop');
                 btnArray[j].classList.add('fa-play');
                 btnArray[j].classList.remove('mui-btn-danger');
                 btnArray[j].classList.add('mui-btn-primary');
             } else {
-                if (global.currentStatus == 'Stop' || btnArray[j].getAttribute('videoName') != global.playingFileName) {
+                if(global.currentPlaylist.name != global.viewPlaylist.name) {
+                    btnArray[j].classList.remove('fa-stop');
+                    btnArray[j].classList.add('fa-play');
+                } else if (global.dlnaPlayer.status == 'Stop' || btnArray[j].getAttribute('videoName') != global.currentVideo.name) {
                     btnArray[j].classList.remove('fa-stop');
                     btnArray[j].classList.add('fa-play');
                 } else {

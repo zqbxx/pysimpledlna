@@ -369,8 +369,8 @@ def playlist_play(args):
                 cmd = ['python', os.path.join(os.path.split(os.path.abspath(__file__))[0], 'cli.py')]
                 cwd = str(Path(os.path.join(os.path.split(os.path.abspath(__file__))[0])).parent)
             else:
-                cmd = [get_abs_path('pysimpledlna.exe'), ]
-                cwd = get_abs_path()
+                cmd = [str(get_abs_path('pysimpledlna.exe')), ]
+                cwd = str(get_abs_path())
 
             for arg in args.prompt_args:
                 cmd.append(arg)
@@ -419,12 +419,7 @@ def playlist_play(args):
 
     dlna_server.register_device(device)
 
-    playlist_contents = RadioList(values=[('', '')])
-    playlist_list_contents = RadioList(values=[('', '')])
-    player = PlayListPlayer(playlist_contents, playlist_list_contents)
-
     # 初始化播放列表
-    position_in_playlist = dict()
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
@@ -433,18 +428,30 @@ def playlist_play(args):
     play_list = PlayListWrapper()
     play_list.playlist = Playlist.get_playlist(play_list_file)
     play_list.playlist.load_playlist()
+    play_list.set_vo(play_list.playlist)
+
+    playlist_list_contents = RadioList(values=[('', '')])
+    player = PlayListPlayer(play_list, playlist_list_contents)
 
     player_model: PlayerModel = player.create_model()
-    ac = ActionController(play_list.playlist.media_list, device, player_model)
+    ac = ActionController(play_list, device, player_model)
+
+    # 设置内部播放列表
+    def _setup_inner_playlist(new_play_list: Playlist):
+        play_list.playlist = new_play_list
+        ac.current_idx = play_list.playlist.current_index
+        play_list.playlist_init_index = play_list.playlist.current_index
+        play_list.playlist_init_position = play_list.playlist.current_pos
+
+    # 设置视图播放列表
+    def _setup_view_playlist(new_play_list: Playlist):
+        play_list.set_vo(new_play_list)
+        player.update_playlist_part()
 
     # 设置播放列表
-    def _setup_playlist(new_play_list):
-        playlist_contents.values = [(f, os.path.split(f)[1]) for f in new_play_list.media_list]
-        ac.file_list = new_play_list.media_list
-        ac.current_idx = new_play_list.current_index
-        position_in_playlist['current_pos'] = new_play_list.current_pos
-        position_in_playlist['current_index'] = new_play_list.current_index
-        playlist_contents.set_checked_index(new_play_list.current_index)
+    def _setup_playlist(new_play_list: Playlist):
+        _setup_inner_playlist(new_play_list)
+        _setup_view_playlist(new_play_list)
 
     _setup_playlist(play_list.playlist)
 
@@ -495,19 +502,55 @@ def playlist_play(args):
         if samefile(old_file_path, new_file_path):
             return
 
-        ac.stop()
+        new_playlist = Playlist.get_playlist(new_file_path)
+        _setup_playlist_list(new_playlist.get_playlist_name())
+        _setup_view_playlist(new_playlist)
+        return
 
-        play_list.playlist = Playlist.get_playlist(new_file_path)
-        play_list.playlist.load_playlist()
-        _setup_playlist(play_list.playlist)
-        _setup_playlist_list(play_list.playlist.get_playlist_name())
-        return play_list
+    # 切换视频
+    def _video_selected(old_value, new_value):
+       old_file_path = old_value[0]
+       old_file_name = old_value[1]
+
+       new_file_path = new_value[0]
+       new_file_name = new_value[1]
+
+       # 视图显示的播放列表与内部播放列表不一致时
+       # 先将内部播放列表设置为视图播放列表
+       # 然后递归调用进行播放
+       if not play_list.is_sync():
+           play_list.playlist.save_playlist(force=True)
+           new_playlist = Playlist.get_playlist(play_list.get_view_playlist_path())
+           _setup_inner_playlist(new_playlist)
+           return _video_selected(old_value, new_value)
+
+       if os.path.samefile(old_file_path, new_file_path) \
+               and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] \
+               and os.path.samefile(new_file_path, ac.local_file_path):
+           if ac.player.player_status == PlayerStatus.PAUSE:
+               ac.play()
+           return True
+
+       if not os.path.samefile(old_file_path, new_file_path) \
+               or not os.path.samefile(new_file_path, ac.local_file_path):
+           selected_index = player.playlist_part.get_selected_index()
+
+           ac.current_idx = selected_index
+           ac.play()
+       else:
+           play_list.playlist.load_playlist()
+           _setup_playlist(play_list.playlist)
+           ac.play()
 
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
 
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
-    dlna_service = DLNAService(ac, playlist_accessor=_get_playlist_list, switch_playlist=lambda: _playlist_selected().playlist, current_playlist=lambda: play_list.playlist)
+    dlna_service = DLNAService(ac,
+                               play_list=play_list,
+                               playlist_accessor=_get_playlist_list,
+                               switch_playlist=_playlist_selected,
+                               switch_video=_video_selected)
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
     player.webcontrol_url = web_root.get_player_page_url()
@@ -515,32 +558,10 @@ def playlist_play(args):
     player.create_ui()
 
     # 事件处理
-    # 切换视频
-    def _video_selected(old_value, new_value):
-        old_file_path = old_value[0]
-        old_file_name = old_value[1]
-
-        new_file_path = new_value[0]
-        new_file_name = new_value[1]
-
-        if os.path.samefile(old_file_path, new_file_path) \
-                and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] \
-                and os.path.samefile(new_file_path, ac.local_file_path) :
-            return True
-
-        if not os.path.samefile(old_file_path, new_file_path) \
-                or not os.path.samefile(new_file_path, ac.local_file_path):
-            selected_index = playlist_contents.get_selected_index()
-
-            ac.current_idx = selected_index
-            ac.play()
-        else:
-            play_list.playlist.load_playlist()
-            _setup_playlist(play_list.playlist)
-            ac.play()
-
+    # 更新播放列表选中项位置，如果视图被切换则不进行更新视频列表内容
     def _update_list_ui(current_index):
-        playlist_contents.current_value = playlist_contents.values[current_index][0]
+        if play_list.is_sync():
+            player.playlist_part.current_value = player.playlist_part.values[current_index][0]
 
     # 视频进度向前
     def _forward(event, times):
@@ -565,8 +586,8 @@ def playlist_play(args):
     # 播放下一个视频
     def _next(event, times):
         ac.current_idx += times
-        if ac.current_idx >= len(playlist_contents.values):
-            ac.current_idx = len(playlist_contents.values) - 1
+        if ac.current_idx >= len(play_list.playlist.media_list):
+            ac.current_idx = len(play_list.playlist.media_list) - 1
         ac.play()
 
     # 播放上一个视频
@@ -579,7 +600,6 @@ def playlist_play(args):
     # 设置播放列表中当前视频的索引
     def _update_playlist_index(current_index):
         play_list.playlist.current_index = current_index
-        play_list.playlist._current_pos = 0
         play_list.playlist.save_playlist(force=True)
 
     # 设置播放列表中当前视频的播放位置
@@ -598,18 +618,21 @@ def playlist_play(args):
         
         logger.debug('==start==')
         logger.debug(f'cur index: {current_index}')
-        logger.debug(f"position_in_playlist: {position_in_playlist['current_pos']}")
+        logger.debug(f"position_in_playlist: {play_list.playlist_init_position}")
         logger.debug(f'current_video_position: {ac.current_video_position}')
-        logger.debug(f'seek to {format_time(play_list.skip_head)}')
+        logger.debug(f'seek to {format_time(play_list.playlist.skip_head)}')
         logger.debug('== end ==')
 
-        if position_in_playlist['current_pos'] > 0 and position_in_playlist['current_index'] == ac.current_idx:
-            if position_in_playlist['current_pos'] > ac.current_video_position:
-                time_str = format_time(position_in_playlist['current_pos'])
+        if play_list.playlist_init_position > 0 and play_list.playlist_init_index == ac.current_idx:
+            if play_list.playlist_init_position > ac.current_video_position:
+                resume_position = play_list.playlist_init_position - 5
+                if resume_position < 0:
+                    resume_position = 0
+                time_str = format_time(resume_position)
                 ac.device.seek(time_str)
-                play_list.playlist.current_pos = position_in_playlist['current_pos']
+                play_list.playlist.current_pos = play_list.playlist_init_position
                 play_list.playlist.save_playlist(force=True)
-                position_in_playlist['current_pos'] = -1
+                play_list.playlist_init_position = -1
         elif play_list.playlist.skip_head > 0:
             time.sleep(0.5)
             time_str = format_time(play_list.playlist.skip_head)
@@ -636,7 +659,7 @@ def playlist_play(args):
             ac.stop_device()
 
     # 加入事件监听
-    playlist_contents.check_event += _video_selected
+    player.playlist_part.check_event += _video_selected
     playlist_list_contents.check_event += _playlist_selected
     # TODO 事件没有被调用，待查
     player.player_events['quit'] += _quit

@@ -40,13 +40,13 @@ from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, 
 from typing import Optional, Sequence, Tuple
 import logging
 
-from pysimpledlna.entity import LocalFilePlaylist
+from pysimpledlna.entity import LocalFilePlaylist, PlayListWrapper
 
 
 class PlayListPlayer(Progress):
 
     def __init__(self,
-                 playlist_part: RadioList,
+                 playlist_wrapper: PlayListWrapper,
                  playlistlist_part: RadioList,
                  top_text: Tuple[str] = None,
                  title: AnyFormattedText = None,
@@ -80,7 +80,9 @@ class PlayListPlayer(Progress):
         self.player_controls_part = None
         self.player_controls_keybindings = None
         self.player_controls_cp = None
-        self.playlist_part: RadioList = playlist_part
+        self.playlist_wrapper = playlist_wrapper
+        self.playlist_part: RadioList = RadioList(values=self.playlist_wrapper.playlist_player_view)
+        self.playlist_part.set_checked_index(self.playlist_wrapper.playlist_player_view.playlist.current_index)
         self.playlistlist_part: RadioList = playlistlist_part
         self.top_text: Tuple[str] = top_text
 
@@ -109,6 +111,10 @@ class PlayListPlayer(Progress):
         self.event_thread = None
 
         self.webcontrol_url = webcontrol_url
+
+    def update_playlist_part(self):
+        self.playlist_part.values = self.playlist_wrapper.playlist_player_view
+        self.playlist_part.set_checked_index(self.playlist_wrapper.playlist_player_view.playlist.current_index)
 
     def is_accept_key_press(self):
         return (time.time() - self.last_key_press_time) > self.min_key_press_interval
