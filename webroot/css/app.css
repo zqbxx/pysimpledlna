@@ -210,3 +210,17 @@ input[type=range]:focus::-ms-fill-upper {
 .dlna-player-info:after{
     clear:both;
 }
+
+.playlist-progress {
+    background-repeat: no-repeat;
+    height: 2px;
+    background-color: #2980b9;
+    position: relative;
+    bottom: -10px;
+}
+
+.playlist-progress-text {
+    font-size:0.8em;
+    color:grey;
+    padding-left: 3px;
+}

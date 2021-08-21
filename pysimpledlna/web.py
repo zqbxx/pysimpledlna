@@ -209,6 +209,7 @@ class DLNAService(DefaultResource):
                         'name': view_playlist.get_playlist_name(),
                         'index': current_index,
                         'position': view_playlist.current_pos,
+                        'duration': view_playlist.current_duration,
                         'videoList': [Path(f).name for f in self.ac.play_list.playlist_view]
                     }
                 }

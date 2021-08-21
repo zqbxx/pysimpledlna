@@ -600,7 +600,13 @@ def playlist_play(args):
     # 设置播放列表中当前视频的索引
     def _update_playlist_index(current_index):
         play_list.playlist.current_index = current_index
-        play_list.playlist.save_playlist(force=True)
+        play_list.playlist.save_playlist(force=False)
+
+    # 更新播放列表当前文件长度
+    def _update_current_video_duration(o_position, n_position):
+        if play_list.playlist.current_duration != ac.current_video_duration and ac.current_video_duration != 0:
+            play_list.playlist.current_duration = ac.current_video_duration
+            play_list.playlist.save_playlist(force=True)
 
     # 设置播放列表中当前视频的播放位置
     def _update_playlist_video_position(o_position, n_position):
@@ -673,6 +679,7 @@ def playlist_play(args):
     ac.events['video_position'] += _skip_tail
     ac.events['play'] += _update_list_ui
     ac.events['play'] += _update_playlist_index
+    ac.events['video_position'] += _update_current_video_duration
     ac.events['video_position'] += _update_playlist_video_position
     ac.events['stop'] += _save_playlist
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)

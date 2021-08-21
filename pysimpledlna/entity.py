@@ -14,6 +14,7 @@ class Playlist:
         self._current_index = 0
         self._current_media_path = None
         self._current_pos = 0
+        self._current_duration = 0
         self._media_list = []
         self._skip_head = 0
         self._skip_tail = 0
@@ -60,6 +61,7 @@ class Playlist:
                 'type': self._type,
                 "current_index": self._current_index,
                 "current_pos": self._current_pos,
+                "current_duration": self._current_duration,
                 "file_list": self._media_list,
                 "skip_head": self._skip_head,
                 "skip_tail": self._skip_tail,
@@ -97,6 +99,8 @@ class Playlist:
             self._current_media_path = self._media_list[self._current_index]
         if self._jso.get('current_pos') is not None:
             self._current_pos = int(self._jso.get('current_pos'))
+        if self._jso.get('current_duration') is not None:
+            self._current_duration = int(self._jso.get('current_duration'))
         if self._jso.get('skip_head') is not None:
             self._skip_head = self._jso.get('skip_head')
         if self._jso.get('skip_tail') is not None:
@@ -128,6 +132,14 @@ class Playlist:
     @current_pos.setter
     def current_pos(self, current_pos):
         self._current_pos = current_pos
+
+    @property
+    def current_duration(self):
+        return self._current_duration
+
+    @current_duration.setter
+    def current_duration(self, current_duration):
+        self._current_duration = current_duration
 
     @property
     def media_list(self):
