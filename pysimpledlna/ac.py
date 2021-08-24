@@ -49,6 +49,7 @@ class ActionController:
             'play_last': Event(),
             'play': Event(),
             'stop': Event(),
+            'resume': Event(),
             'video_position': Event(),
         }
 
@@ -134,7 +135,7 @@ class ActionController:
         elif type == 'RelTimeInSeconds':
             if self.is_occupied:
                 return
-            if self.player.player_status == PlayerStatus.STOP:
+            if self.player.player_status == PlayerStatus.STOP or self.player.player_status == PlayerStatus.PAUSE:
                 return
             if self.current_video_position != new_value:
                 self.events['video_position'].fire(self.current_video_position, new_value)
@@ -164,9 +165,7 @@ class ActionController:
         self.play()
         self.events['play_last'].fire(self.current_idx)
 
-    def play(self):
-        logger.debug(f'ac.play, caller: {traceback.extract_stack()[-2][2]}')
-        self.enable_hook = False
+    def prepare_play(self):
 
         if not self.validate_current_index():
             return
@@ -181,9 +180,18 @@ class ActionController:
         self.current_video_duration = 0
         self.server_file_path = self.device.add_file(self.local_file_path)
 
+        self.device.stop()
+        self.device.set_AV_transport_URI(self.server_file_path)
+
+    def play(self):
+        logger.debug(f'ac.play, caller: {traceback.extract_stack()[-2][2]}')
+        self.enable_hook = False
+
+        if not self.validate_current_index():
+            return
+
         try:
-            self.device.stop()
-            self.device.set_AV_transport_URI(self.server_file_path)
+            self.prepare_play()
             self.device.play()
             self.player.player_status = PlayerStatus.PLAY
             self.ensure_player_is_playing()
@@ -194,13 +202,13 @@ class ActionController:
             self.events['play'].fire(self.current_idx)
             self.enable_hook = True
 
-    def resume(self, stop=True, seek_to: int = 0):
+    def resume(self, stop=False, seek_to: int = 0, ):
         self.enable_hook = False
         try:
             time_str = format_time(self.current_video_position)
-
             if seek_to > 0:
                 time_str = format_time(seek_to)
+                self.current_video_position = seek_to
 
             if stop:
                 self.device.stop()
@@ -209,12 +217,18 @@ class ActionController:
             self.device.play()
             self.player.player_status = PlayerStatus.PLAY
             self.ensure_player_is_playing()
-            self.device.seek(time_str)
+            if seek_to > 0:
+                self.device.seek(time_str)
             # 强制下一次轮询时强制更新
             if self.device.sync_thread is not None:
                 self.device.sync_thread.last_status = None
         finally:
+            self.events['resume'].fire(self.current_idx)
             self.enable_hook = True
+
+    def pause(self):
+        self.device.pause()
+        self.player.player_status = PlayerStatus.PAUSE
 
     def stop(self):
         if self.player.player_status != PlayerStatus.STOP:

@@ -600,7 +600,7 @@ def playlist_play(args):
     # 设置播放列表中当前视频的索引
     def _update_playlist_index(current_index):
         play_list.playlist.current_index = current_index
-        play_list.playlist.save_playlist(force=False)
+        play_list.playlist.save_playlist(force=True)
 
     # 更新播放列表当前文件长度
     def _update_current_video_duration(o_position, n_position):
@@ -667,10 +667,12 @@ def playlist_play(args):
     # 加入事件监听
     player.playlist_part.check_event += _video_selected
     playlist_list_contents.check_event += _playlist_selected
+
     # TODO 事件没有被调用，待查
     player.player_events['quit'] += _quit
+
     player.controller_events['pause'] += \
-        lambda e: ac.device.play() if player_model.player_status == PlayerStatus.PAUSE else ac.device.pause()
+        lambda e: ac.resume() if player_model.player_status == PlayerStatus.PAUSE else ac.pause()
     player.controller_events['last'] += _last
     player.controller_events['next'] += _next
     player.controller_events['forward'] += _forward
@@ -682,6 +684,8 @@ def playlist_play(args):
     ac.events['video_position'] += _update_current_video_duration
     ac.events['video_position'] += _update_playlist_video_position
     ac.events['stop'] += _save_playlist
+    ac.events['resume'] += _update_list_ui
+    ac.events['resume'] += _update_playlist_index
     device.set_sync_hook(positionhook=ac.hook, transportstatehook=ac.hook, exceptionhook=ac.excpetionhook)
 
     # 开始同步状态

@@ -335,6 +335,7 @@ class Device():
     def add_file(self, file_path):
         p_file_path = Path(file_path)
         # TODO 随机文件名作为配置项
+        #file_key = p_file_path.name
         file_key = random_str() + p_file_path.suffix
         self.video_files[file_key] = p_file_path
         file_url = self.dlna_server.get_server_file_path(self, file_key)

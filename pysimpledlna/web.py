@@ -85,10 +85,10 @@ class DLNAService(DefaultResource):
         if request_command == 'status':
             return self.get_dlna_status()
         elif request_command == 'pause':
-            self.ac.device.pause()
+            self.ac.pause()
             return ''
         elif request_command == 'play':
-            self.ac.device.play()
+            self.ac.resume()
             return ''
         elif request_command == 'stop':
             self.ac.stop()
@@ -104,16 +104,46 @@ class DLNAService(DefaultResource):
         elif request_command == 'switchPlayList':
             return self.switch_playlist()
         elif request_command == 'playAtApp':
-            return self.playAtApp()
+            index = int(request.params.get('index'))
+            return self.play_at_app(index)
         elif request_command == 'backToDlna':
-            pos = int(request.params.get('pos'))
-            self.back_to_dlna(pos)
+            self.back_to_dlna()
             return ''
 
         abort(404, "错误的命令")
 
-    def back_to_dlna(self, seek_to: int):
-        self.ac.resume(stop=False, seek_to=seek_to)
+    def back_to_dlna(self):
+        index = int(request.params.get('index'))
+        seek_to = int(request.params.get('pos'))
+        playlist_name = request.params.get('playlist').encode('iso8859-1').decode('utf-8')
+        duration = int(request.params.get('duration'))
+
+        if playlist_name != self._play_list.playlist.get_playlist_name():
+            playlist_path = Path(self._play_list.playlist.file_path).parent / (playlist_name + '.playlist')
+            p = Playlist.get_playlist(playlist_path)
+            p.current_pos = seek_to
+            p.current_index = index
+            p.current_duration = duration
+            p.save_playlist(force=True)
+            return
+
+        if self.ac.is_occupied:
+            self._play_list.playlist.current_duration = duration
+            self._play_list.playlist.current_index = index
+            self._play_list.playlist.current_pos = seek_to
+            self.ac.current_video_duration = duration
+            self.ac.current_idx = index
+            self.ac.current_video_position = seek_to
+            self._play_list.playlist.save_playlist(force=True)
+            return
+        self.ac.enable_hook = False
+        try:
+            if index != self.ac.current_idx:
+                self.ac.current_idx = index
+                self.ac.prepare_play()
+            self.ac.resume(seek_to=seek_to)
+        finally:
+            self.ac.enable_hook = True
 
     def index(self):
         index = int(request.params.get('index'))
@@ -126,7 +156,7 @@ class DLNAService(DefaultResource):
             if index == -1:
                 self.ac.stop()
             elif index == self.ac.current_idx and is_same_file_name:
-                self.ac.resume()
+                self.ac.resume(stop=False)
             else:
                 self.ac.current_idx = index
                 self.ac.play()
@@ -164,11 +194,11 @@ class DLNAService(DefaultResource):
         ret_obj = self._create_all_data()
         return json.dumps(ret_obj, indent=2).encode('utf-8')
 
-    def playAtApp(self):
-        return self.current_video_file()
+    def play_at_app(self, index):
+        return self.current_video_file(index)
 
-    def current_video_file(self):
-        file_path = Path(self.ac.local_file_path)
+    def current_video_file(self, index):
+        file_path = Path(self._play_list.playlist.media_list[index])
         return static_file(file_path.name, root=str(file_path.parent))
 
     def _create_current_playlist_data(self):
@@ -176,6 +206,9 @@ class DLNAService(DefaultResource):
                     'currentPlaylist': {
                         'name': self._play_list.playlist.get_playlist_name(),
                         'index': self.ac.current_idx,
+                        'skipHead': self._play_list.playlist.skip_head,
+                        'skipTail': self._play_list.playlist.skip_tail,
+                        'videoList': [Path(f).name for f in self._play_list.playlist.media_list],
                     }
                 }
 

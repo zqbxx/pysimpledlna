@@ -1,3 +1,4 @@
+//window.onerror = function (msg) { alert(msg) }
 mui.init();
 mui.ready(function() {
     
@@ -8,11 +9,16 @@ mui.ready(function() {
         isSeeking: false,
         chimee: undefined,
         isLocal: false,
-        currentPlaylist: { name: '', index: -1, },
+        currentPlaylist: { name: '', index: -1, skipHead: 0, skipTail: 0, videoList: []},
         currentVideo: { path: '', name: '', position: -1, duration: -1, },
         dlnaPlayer: { occupied: false, status: "", },
-        viewPlaylist: { name: '', index: -1, position: -1, videoList: [], },
+        viewPlaylist: { name: '', index: -1, position: -1, duration: -1, videoList: [], },
     };
+
+    let local = {
+        currentPlaylist: { name: '', index: -1, skipHead: 0, skipTail: 0, videoList: []},
+        currentVideo: {path: '', name: '', position: -1, duration: -1, }
+    }
 
     let playListPicker = new mui.PopPicker();
 
@@ -35,20 +41,12 @@ mui.ready(function() {
 	mui('#circle-progress-wrapper').on('click', '.circle-progress-content', function(){
 		if(global.dlnaPlayer.status == 'Play') {
 			global.dlnaPlayer.status = 'Pause';
-			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){});
+			pauseVideo(function(data){});
 		} else if (global.dlnaPlayer.status == 'Pause') {
 		    global.dlnaPlayer.status = 'Play';
-		    mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()},function(data){});
+		    resumeVideo(function(data){})
 		} else if (global.dlnaPlayer.status = 'Stop') {
-            mui.getJSON(global.apiUrl,
-                        {
-                            command:'index',
-                            r: '' +new Date().getTime(),
-                            index: global.currentPlaylist.index,
-                            name: global.currentVideo.name,
-                        },
-                        function(data){}
-                    );
+		    playVideo(global.currentPlaylist.index, global.currentVideo.name, global.currentPlaylist.name);
         }
 	})
 
@@ -95,9 +93,7 @@ mui.ready(function() {
 	    if (global.isLocal) {
 	        return;
 	    }
-	    mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
-
-	    });
+        seek(offset, function(data){});
 	    offset = 0;
 	    updateSeekInfo(0);
 	    setTimeout(function(){
@@ -123,9 +119,7 @@ mui.ready(function() {
 	    updateSeekInfo(offset);
 	};
 	let rangeSeekEndFunc =function() {
-	    mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()},function(data){
-
-	    });
+	    seek(offset, function(){})
 	    offset = 0;
 	    startPos = 0;
 	    updateSeekInfo(0);
@@ -145,8 +139,7 @@ mui.ready(function() {
 
     //数据更新
     function updateData() {
-        if (global.isLocal)
-            return;
+
         if (!global.isSeeking) {
             mui.getJSON(global.apiUrl,{command:'status', r: '' +new Date().getTime()},function(data){
 
@@ -170,7 +163,7 @@ mui.ready(function() {
                         global.dlnaPlayer = data.dlnaPlayer;
                         global.viewPlaylist = data.viewPlaylist;
 
-                        if (player_status_changed) {
+                        if (player_status_changed && !global.isLocal) {
                             if (data.dlnaPlayer.status == 'Stop') {
                                 document.getElementById('stopVideo').disabled = true;
                             } else {
@@ -192,17 +185,17 @@ mui.ready(function() {
                         if (current_video_changed)
                             document.getElementById('currentFileName').innerHTML = data.currentVideo.name;
 
-                        if (playlist_changed) {
+                        if (playlist_changed && !global.isLocal) {
                             document.getElementById('playlist-name').innerText = data.viewPlaylist.name;
                             createPlaylistVideos(data.viewPlaylist.videoList, data.viewPlaylist.index);
                         }
 
-                        if (video_duration_changed || player_status_changed){
+                        if (video_duration_changed || player_status_changed && !global.isLocal){
                             circleProgress.attr({ max: data.currentVideo.duration, });
                             progressBar.max = global.currentVideo.duration;
                         }
 
-                        if (video_position_changed || player_status_changed) {
+                        if (video_position_changed || player_status_changed && !global.isLocal) {
                             circleProgress.attr({ value: data.currentVideo.position, });
                             progressBar.value = data.currentVideo.position;
                             timeInfoText = formatTime(data.currentVideo.position) + '/' + formatTime(data.currentVideo.duration);
@@ -210,8 +203,12 @@ mui.ready(function() {
                             updateSeekInfo(0);
                         }
 
-                        if (current_video_changed || playlist_changed || player_status_changed) {
+                        if (current_video_changed || playlist_changed || player_status_changed && !global.isLocal) {
                             updatePlaylistVideoStatus(data);
+                        }
+
+                        if (current_video_changed || playlist_changed || player_status_changed || video_duration_changed || video_position_changed && !global.isLocal) {
+                            updatePlaylistProgress();
                         }
 
                     }
@@ -220,6 +217,11 @@ mui.ready(function() {
             );
         }
 
+    }
+
+    function updateLocalData() {
+        document.getElementById('playerStatus').innerHTML = '本机播放';
+        document.getElementById('currentFileName').innerHTML = local.currentVideo.name;
     }
 
     //获取播放列表
@@ -258,7 +260,7 @@ mui.ready(function() {
     });
 
     document.getElementById('stopVideo').addEventListener('click', function() {
-        mui.getJSON(global.apiUrl,{command:'stop', r: '' +new Date().getTime()},function(data){});
+        stopVideo(function(data){});
         this.disabled = true;
     });
 
@@ -285,7 +287,14 @@ mui.ready(function() {
             let pos = parseInt(global.chimee.currentTime);
             let offset = parseInt(global.chimee.currentTime - global.currentPosition);
             global.chimee.destroy();
-            mui.getJSON(global.apiUrl,{command:'backToDlna', pos: pos - 3,  r: '' +new Date().getTime()},function(data){
+            mui.getJSON(global.apiUrl,{
+                command:'backToDlna',
+                pos: pos - 3,
+                r: '' + new Date().getTime(),
+                playlist: global.currentPlaylist.name,
+                index: local.currentPlaylist.index,
+                duration: parseInt(local.currentVideo.duration),
+            },function(data){
                 thisElement.classList.add('fa-play-circle-o');
                 thisElement.classList.remove('fa-arrow-circle-left');
                 thisElement.innerText = '本机播放';
@@ -298,28 +307,18 @@ mui.ready(function() {
             });
         } else if (hasClass(this, 'fa-play-circle-o')) {
             mask.show();
-            document.getElementById('circleProgress').style.display = 'none';
-            document.getElementById('videoPlayer').style.display = '';
-            global.isLocal = true;
-            global.chimee = new ChimeeMobilePlayer({
-				wrapper: '#videoPlayer',
-				controls: true,
-				autoplay: true,
-				x5VideoPlayerFullscreen: true,
-				x5VideoOrientation: 'portrait',
-				xWebkitAirplay: true,
-				width:'100%',
-				height:'100%',
-			});
-            flag = -1;
-            global.chimee.on('timeupdate', function(){
-                if (flag == -1 && global.chimee.currentTime > 0.3) {
-                    flag = 1;
-                    global.chimee.currentTime = global.currentVideo.position - 3;
-                }
-			});
-			mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()},function(data){
-                global.chimee.load(global.apiUrl + '?command=playAtApp&r=' + new Date().getTime());
+            global.chimee = createChimee();
+            local.currentPlaylist.name = global.currentPlaylist.name;
+            local.currentPlaylist.index = global.currentPlaylist.index;
+            local.currentVideo.path = global.currentVideo.path;
+            local.currentVideo.name = global.currentVideo.name;
+            local.currentVideo.position = global.currentVideo.position;
+            local.currentVideo.duration = global.currentVideo.duration;
+            showVideoPlayer(global.chimee, global.currentVideo.position, global.currentPlaylist.index, false);
+            pauseVideo(function(data) {
+                global.chimee.load(global.apiUrl
+                                + '?index=' + global.currentPlaylist.index
+                                + '&command=playAtApp&r=' + new Date().getTime());
                 thisElement.classList.remove('fa-play-circle-o');
                 thisElement.classList.add('fa-arrow-circle-left');
                 thisElement.innerText = '返回投屏';
@@ -328,9 +327,75 @@ mui.ready(function() {
 					mask.close();
 				}, 300);
 			});
-
         }
     });
+
+    function showVideoPlayer(chimee, currentVideoPosition, currentVideoIndex, autoFullScreen) {
+        document.getElementById('circleProgress').style.display = 'none';
+        document.getElementById('videoPlayer').style.display = '';
+        global.isLocal = true;
+        let flag = -1;
+        let end = false;
+        global.chimee.on('timeupdate', function() {
+            if (end || isNaN(chimee.duration) || chimee.duration == 0)
+                return;
+            if (flag == -1 && chimee.currentTime > 0.3) {
+                flag = 1;
+                /*
+                if (autoFullScreen) {
+                    chimee.requestFullscreen('container');
+                }*/
+                let offset = global.currentPlaylist.skipHead;
+                if (currentVideoPosition > global.currentPlaylist.skipHead)
+                    offset = currentVideoPosition - 3
+                chimee.currentTime = offset
+            }
+            if (global.currentPlaylist.length == currentVideoIndex - 1)
+                return
+            let leftTime = chimee.duration - (chimee.currentTime + global.currentPlaylist.skipTail);
+            if (leftTime <= 1 ) {
+                end = true;
+                chimee.exitFullscreen();
+                let nextVideoIndex = currentVideoIndex + 1;
+                if (nextVideoIndex > global.currentPlaylist.videoList.length - 1) {
+                    chimee.pause()
+                }
+                let nextVideoName = global.currentPlaylist.videoList[nextVideoIndex];
+                destroyChimee();
+                global.chimee = createChimee();
+                showVideoPlayer(global.chimee, 0, nextVideoIndex, true);
+                global.chimee.load(global.apiUrl
+                                + '?index=' + nextVideoIndex
+                                + '&command=playAtApp&r=' + new Date().getTime());
+                local.currentPlaylist.index = nextVideoIndex;
+                local.currentVideo.name = nextVideoName;
+            }
+
+            local.currentVideo.position = chimee.currentTime;
+            local.currentVideo.duration = chimee.duration;
+            updateLocalData();
+
+        });
+
+    }
+
+    function destroyChimee() {
+        global.chimee.destroy();
+        global.chimee = undefined;
+    }
+
+    function createChimee() {
+        return new ChimeeMobilePlayer({
+                wrapper: '#videoPlayer',
+                controls: true,
+                autoplay: true,
+                x5VideoPlayerFullscreen: true,
+                x5VideoOrientation: 'portrait',
+                xWebkitAirplay: true,
+                width:'100%',
+                height:'100%',
+            });
+    }
 
     document.getElementById('buttonPlaylistMenu').addEventListener('tap', function() {
         setTimeout(function(){
@@ -353,27 +418,24 @@ mui.ready(function() {
             btn.setAttribute('videoName', file_name_list[i])
             btn.className = 'mui-btn fa';
             btn.setAttribute('videoIndex', "" + i)
+            let playlistProgressText = document.createElement('span');
+            playlistProgressText.className = 'playlist-progress-text';
+
+            let playlistProgress = document.createElement('div');
+            playlistProgress.className = 'playlist-progress';
+            playlistProgress.style.width = '0%'
 
             li.appendChild(spanName);
+            li.appendChild(playlistProgressText);
             li.appendChild(btn);
+            li.appendChild(playlistProgress);
             btn.addEventListener('tap', function() {
                 currentIndex = -1;
                 if (hasClass(this, 'fa-play')) {
                     currentIndex = this.getAttribute('videoIndex');
                 }
-                mui.getJSON(
-                        global.apiUrl,
-                        {
-                            command:'index',
-                            index: currentIndex,
-                            name: this.getAttribute('videoName'),
-                            r: '' + new Date().getTime(),
-                        },
-                        function(data){
-                            updatePlaylistVideoStatus(data);
-                        }
-                 );
-            })
+                playVideo(currentIndex, this.getAttribute('videoName'), global.viewPlaylist.name);
+            });
             videoFileList.appendChild(li);
         }
         updatePlaylistVideoStatus({});
@@ -384,33 +446,93 @@ mui.ready(function() {
             global.viewPlaylist.index = data.viewPlaylist.index;
         if (data.dlnaPlayer && data.dlnaPlayer.status)
             global.dlnaPlayer.status = data.dlnaPlayer.status;
-        let btnArray = document.querySelectorAll('#video-file-list button');
-        for (let j = 0 ; j < btnArray.length ; j++ ) {
+        let rows = document.querySelectorAll('#video-file-list li');
+        for (let j = 0 ; j < rows.length ; j++ ) {
+            let btn = rows[j].querySelector('button');
+            let playlistProgress = rows[j].querySelector('.playlist-progress');
+            let playlistProgressText = rows[j].querySelector('.playlist-progress-text');
             if ( j != global.viewPlaylist.index ) {
-                btnArray[j].classList.remove('fa-stop');
-                btnArray[j].classList.add('fa-play');
-                btnArray[j].classList.remove('mui-btn-danger');
-                btnArray[j].classList.add('mui-btn-primary');
+                rows[j].classList.remove('playing');
+                rows[j].querySelector('.playlist-progress-text').innerHTML = '';
+                rows[j].querySelector('.playlist-progress').style.width = 0;
+                btn.classList.remove('fa-stop');
+                btn.classList.add('fa-play');
+                btn.classList.remove('mui-btn-danger');
+                btn.classList.add('mui-btn-primary');
             } else {
+                rows[j].classList.add('playing')
                 if(global.currentPlaylist.name != global.viewPlaylist.name) {
-                    btnArray[j].classList.remove('fa-stop');
-                    btnArray[j].classList.add('fa-play');
-                } else if (global.dlnaPlayer.status == 'Stop' || btnArray[j].getAttribute('videoName') != global.currentVideo.name) {
-                    btnArray[j].classList.remove('fa-stop');
-                    btnArray[j].classList.add('fa-play');
+                    btn.classList.remove('fa-stop');
+                    btn.classList.add('fa-play');
+                } else if (global.dlnaPlayer.status == 'Stop' || btn.getAttribute('videoName') != global.currentVideo.name) {
+                    btn.classList.remove('fa-stop');
+                    btn.classList.add('fa-play');
                 } else {
-                    btnArray[j].classList.remove('fa-play');
-                    btnArray[j].classList.add('fa-stop');
+                    btn.classList.remove('fa-play');
+                    btn.classList.add('fa-stop');
                 }
-                btnArray[j].classList.remove('mui-btn-primary');
-                btnArray[j].classList.add('mui-btn-danger');
+                btn.classList.remove('mui-btn-primary');
+                btn.classList.add('mui-btn-danger');
             }
+
         }
+
+        updatePlaylistProgress();
+    }
+
+    function updatePlaylistProgress() {
+        let playingRow = document.querySelector('#video-file-list > li.mui-table-view-cell.playing');
+        let playingVideoProgressText = playingRow.querySelector('.playlist-progress-text')
+        let playlistProgress = playingRow.querySelector('.playlist-progress');
+        percent = -1;
+        if (global.currentPlaylist.name == global.viewPlaylist.name) {
+            if (global.currentVideo.duration > 0) {
+                percent = global.currentVideo.position / global.currentVideo.duration * 100
+            }
+        } else if (global.viewPlaylist.duration > 0) {
+            percent = global.viewPlaylist.position / global.viewPlaylist.duration * 100
+        }
+        if (percent > -1) {
+            playlistProgress.style.width = (percent > 1 ? percent.toFixed(0) : 1) + '%';
+            playingVideoProgressText.innerText = '(已播放:' + percent.toFixed(2) + '%)'
+        }
+
     }
 
 
     updateData();
     getAllPlaylist();
-
     setInterval(updateData, 500)
+
+    function playVideo(index, fileName, playlistName) {
+        mui.getJSON(
+                global.apiUrl,
+                {
+                    command:'index',
+                    index: index,
+                    name: fileName,
+                    playlistName: playlistName,
+                    r: '' + new Date().getTime(),
+                },
+                function(data){
+                    updatePlaylistVideoStatus(data);
+                }
+         );
+    }
+
+    function pauseVideo(callback) {
+        mui.getJSON(global.apiUrl,{command:'pause', r: '' +new Date().getTime()}, callback);
+    }
+
+    function resumeVideo(callback) {
+        mui.getJSON(global.apiUrl,{command:'play', r: '' +new Date().getTime()}, callback);
+    }
+
+    function stopVideo(callback) {
+        mui.getJSON(global.apiUrl,{command:'stop', r: '' +new Date().getTime()}, callback);
+    }
+
+    function seek(offset, callback) {
+        mui.getJSON(global.apiUrl,{command:'seek', pos:offset, r: '' +new Date().getTime()}, callback);
+    }
 });
