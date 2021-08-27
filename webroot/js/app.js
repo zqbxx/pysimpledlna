@@ -65,40 +65,57 @@ mui.ready(function() {
 
     //进度跳转
     let offset = 0
-    function updateSeekInfo(t) {
+    function updateSeekInfo(t, position) {
         formattedTime = formatTime(t);
         if (!formattedTime.startsWith('-') && t != 0) {
             formattedTime = '+' + formattedTime;
         }
         document.getElementById('timeOffsetInfo').innerHTML =
-          (t == 0 ? '' : formattedTime + '/')
-        +formatTime(global.currentVideo.position)
-        + (t == 0 ? '' : '(' + formatTime(global.currentVideo.position + t)  + ')');
+          (t == 0 ? '' : formattedTime + '/') + formatTime(position) + (t == 0 ? '' : '(' + formatTime(position + t)  + ')');
     }
-    updateSeekInfo(0);
+    updateSeekInfo(0, global.currentVideo.position);
     let seekBtnFunc = function() {
-    	if (global.isLocal) {
+    	/*if (global.isLocal) {
 	        return;
+	    }*/
+	    position = -1;
+	    duration = -1;
+	    if (global.isLocal) {
+	        position = local.currentVideo.position;
+	        duration = local.currentVideo.duration;
+	    } else {
+	        position = global.currentVideo.position;
+	        duration = global.currentVideo.duration;
 	    }
         global.isSeeking = true
         offset += parseInt(this.getAttribute('timeOffset'));
-        if ((offset < 0) && (global.currentVideo.position + offset < 0) ) {
-            offset = -global.currentVideo.position;
-        } else if (offset + global.currentVideo.position > global.currentVideo.duration) {
-            offset = global.currentVideo.duration - global.currentVideo.position;
+        if ((offset < 0) && (position + offset < 0) ) {
+            offset = -position;
+        } else if (offset + position > duration) {
+            offset = duration - position;
         }
-		updateSeekInfo(offset);
+		updateSeekInfo(offset, position);
 	};
 	let seekBtnEndFunc = debounce(function() {
 	    if (global.isLocal) {
-	        return;
+	        global.chimee.currentTime = offset + global.chimee.currentTime;
+	        updateLocalData({
+	            currentVideo: {
+	                position: global.chimee.currentTime,
+	            }
+	        });
+	    } else {
+	        seek(offset, function(data){});
+	        updateSeekInfo(0, global.currentVideo.position);
 	    }
-        seek(offset, function(data){});
 	    offset = 0;
-	    updateSeekInfo(0);
-	    setTimeout(function(){
+	    if (global.isLocal) {
 	        global.isSeeking = false;
-	    }, 1000);
+	    } else {
+	    	setTimeout(function(){
+	            global.isSeeking = false;
+            }, 1000);
+	    }
 	}, 1000);
 
 	let offsetBtns = document.querySelectorAll('.timeSeekButton')
@@ -107,7 +124,8 @@ mui.ready(function() {
 		ob.addEventListener('click', seekBtnEndFunc);
 	}
 
-    let startPos = 0
+    let startPos = 0;
+    let endPos = 0;
     let progressBar = document.getElementById('progressBar');
     let rangeSeekStartFunc = function(){
         startPos = global.currentVideo.position;
@@ -115,17 +133,34 @@ mui.ready(function() {
     }
 
 	let rangeSeekFunc = function() {
-	    offset = progressBar.value - startPos;
-	    updateSeekInfo(offset);
+	    offset = Math.round(progressBar.value) - startPos;
+	    endPos = Math.round(progressBar.value);
+	    if (global.isLocal)
+	        updateSeekInfo(offset, local.currentVideo.position);
+	    else
+	        updateSeekInfo(offset, global.currentVideo.position);
 	};
 	let rangeSeekEndFunc =function() {
-	    seek(offset, function(){})
+	    if (global.isLocal) {
+	        global.chimee.currentTime = endPos;
+	        updateLocalData({
+	            currentVideo: {
+	                position: global.chimee.currentTime,
+	            }
+	        });
+	    } else {
+	        seek(offset, function(){})
+	        updateSeekInfo(0, global.currentVideo.position);
+	    }
 	    offset = 0;
 	    startPos = 0;
-	    updateSeekInfo(0);
-	    setTimeout(function(){
+	    if (global.isLocal) {
 	        global.isSeeking = false;
-	    }, 1000);
+	    } else {
+	    	setTimeout(function(){
+	            global.isSeeking = false;
+            }, 1000);
+	    }
 
 	};
 
@@ -200,7 +235,7 @@ mui.ready(function() {
                             progressBar.value = data.currentVideo.position;
                             timeInfoText = formatTime(data.currentVideo.position) + '/' + formatTime(data.currentVideo.duration);
                             document.getElementById('timeInfo').innerText = timeInfoText;
-                            updateSeekInfo(0);
+                            updateSeekInfo(0, global.currentVideo.position);
                         }
 
                         if (current_video_changed || playlist_changed || player_status_changed && !global.isLocal) {
@@ -219,9 +254,58 @@ mui.ready(function() {
 
     }
 
-    function updateLocalData() {
-        document.getElementById('playerStatus').innerHTML = '本机播放';
-        document.getElementById('currentFileName').innerHTML = local.currentVideo.name;
+    function updateLocalData(data) {
+        if (document.getElementById('playerStatus').innerHTML != '本机播放')
+            document.getElementById('playerStatus').innerHTML = '本机播放';
+        if (data.currentVideo != undefined) {
+            currentVideo = data.currentVideo
+            if (currentVideo.name != undefined) {
+                local.currentVideo.name = currentVideo.name;
+                document.getElementById('currentFileName').innerHTML = local.currentVideo.name;
+            }
+            if (currentVideo.duration != undefined) {
+                local.currentVideo.duration = currentVideo.duration;
+                circleProgress.attr({ max: local.currentVideo.duration, });
+                progressBar.max = local.currentVideo.duration;
+            }
+            if (currentVideo.position != undefined) {
+                local.currentVideo.position = currentVideo.position;
+                circleProgress.attr({ value: local.currentVideo.position, });
+                if (!global.isSeeking) {
+                    progressBar.value = local.currentVideo.position;
+                    updateSeekInfo(0, currentVideo.position);
+                    let playingRow = document.querySelector('#video-file-list > li.mui-table-view-cell.playing');
+                    let playingVideoProgressText = playingRow.querySelector('.playlist-progress-text');
+                    let playlistProgress = playingRow.querySelector('.playlist-progress');
+                    if (currentVideo.duration > 0) {
+                        percent = currentVideo.position / currentVideo.duration * 100;
+                        playlistProgress.style.width = (percent > 1 ? percent.toFixed(0) : 1) + '%';
+                        playingVideoProgressText.innerText = '(已播放:' + percent.toFixed(2) + '%)';
+                    }
+                }
+                timeInfoText = formatTime(local.currentVideo.position) + '/' + formatTime(local.currentVideo.duration);
+                document.getElementById('timeInfo').innerText = timeInfoText;
+            }
+        }
+        if (data.currentPlaylist != undefined) {
+            currentPlaylist = data.currentPlaylist
+            if (currentPlaylist.name != undefined) {
+                local.currentPlaylist.name = currentPlaylist.name;
+            }
+            if (currentPlaylist.index != undefined) {
+                local.currentPlaylist.index = currentPlaylist.index;
+                updatePlaylistVideoStatus({}, local);
+            }
+            if (currentPlaylist.name != undefined) {
+                local.currentPlaylist.skipHead = currentPlaylist.skipHead;
+            }
+            if (currentPlaylist.name != undefined) {
+                local.currentPlaylist.skipTail = currentPlaylist.skipTail;
+            }
+            if (currentPlaylist.name != undefined) {
+                local.currentPlaylist.videoList = currentPlaylist.videoList;
+            }
+        }
     }
 
     //获取播放列表
@@ -268,12 +352,8 @@ mui.ready(function() {
 
         function updateButton(enable) {
             document.getElementById('stopVideo').disabled = enable;
-            document.getElementById('progressBar').disabled = enable;
             document.getElementById('morePlaylist').disabled = enable;
 
-            [].forEach.call(document.querySelectorAll('.timeSeekButton'), function(btn) {
-              btn.disabled = enable;
-            });
             [].forEach.call(document.querySelectorAll('#video-file-list > li > button'), function(btn) {
               btn.disabled = enable;
             });
@@ -325,7 +405,7 @@ mui.ready(function() {
                 updateButton(true);
                 mui.later(function(){
 					mask.close();
-				}, 300);
+				}, 100);
 			});
         }
     });
@@ -367,13 +447,22 @@ mui.ready(function() {
                 global.chimee.load(global.apiUrl
                                 + '?index=' + nextVideoIndex
                                 + '&command=playAtApp&r=' + new Date().getTime());
-                local.currentPlaylist.index = nextVideoIndex;
-                local.currentVideo.name = nextVideoName;
-            }
 
-            local.currentVideo.position = chimee.currentTime;
-            local.currentVideo.duration = chimee.duration;
-            updateLocalData();
+                updateLocalData({
+                    currentPlaylist: {
+                        index: nextVideoIndex,
+                    },
+                    currentVideo: {
+                        name: nextVideoName,
+                    }
+                });
+            }
+            updateLocalData({
+                currentVideo: {
+                    position: Math.round(chimee.currentTime),
+                    duration: Math.round(chimee.duration),
+                }
+            });
 
         });
 
@@ -438,20 +527,29 @@ mui.ready(function() {
             });
             videoFileList.appendChild(li);
         }
-        updatePlaylistVideoStatus({});
+        updatePlaylistVideoStatus({}, global);
     }
 
-    function updatePlaylistVideoStatus(data) {
-        if (data.viewPlaylist && data.viewPlaylist.index)
-            global.viewPlaylist.index = data.viewPlaylist.index;
-        if (data.dlnaPlayer && data.dlnaPlayer.status)
-            global.dlnaPlayer.status = data.dlnaPlayer.status;
+    function updatePlaylistVideoStatus(data, context) {
+        isLocalData = (context == local);
+        if (!isLocalData) {
+            if (data.viewPlaylist && data.viewPlaylist.index)
+                global.viewPlaylist.index = data.viewPlaylist.index;
+            if (data.dlnaPlayer && data.dlnaPlayer.status)
+                global.dlnaPlayer.status = data.dlnaPlayer.status;
+        }
         let rows = document.querySelectorAll('#video-file-list li');
+        let currentIndex = -1;
+        if (isLocalData) {
+            currentIndex = local.currentPlaylist.index;
+        } else {
+            currentIndex = global.viewPlaylist.index
+        }
         for (let j = 0 ; j < rows.length ; j++ ) {
             let btn = rows[j].querySelector('button');
             let playlistProgress = rows[j].querySelector('.playlist-progress');
             let playlistProgressText = rows[j].querySelector('.playlist-progress-text');
-            if ( j != global.viewPlaylist.index ) {
+            if ( j != currentIndex ) {
                 rows[j].classList.remove('playing');
                 rows[j].querySelector('.playlist-progress-text').innerHTML = '';
                 rows[j].querySelector('.playlist-progress').style.width = 0;
@@ -461,10 +559,10 @@ mui.ready(function() {
                 btn.classList.add('mui-btn-primary');
             } else {
                 rows[j].classList.add('playing')
-                if(global.currentPlaylist.name != global.viewPlaylist.name) {
+                if(!isLocalData && (global.currentPlaylist.name != global.viewPlaylist.name)) {
                     btn.classList.remove('fa-stop');
                     btn.classList.add('fa-play');
-                } else if (global.dlnaPlayer.status == 'Stop' || btn.getAttribute('videoName') != global.currentVideo.name) {
+                } else if (!isLocalData && (global.dlnaPlayer.status == 'Stop' || btn.getAttribute('videoName') != global.currentVideo.name)) {
                     btn.classList.remove('fa-stop');
                     btn.classList.add('fa-play');
                 } else {
@@ -515,7 +613,7 @@ mui.ready(function() {
                     r: '' + new Date().getTime(),
                 },
                 function(data){
-                    updatePlaylistVideoStatus(data);
+                    updatePlaylistVideoStatus(data, global);
                 }
          );
     }
