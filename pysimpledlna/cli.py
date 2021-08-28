@@ -68,14 +68,19 @@ def main():
         from prompt_toolkit_ext.completer import ArgParserCompleter
         from prompt_toolkit_ext.lexer import ArgParseLexer
         prompt_argparser = PromptArgumentParser()
-        create_args(prompt_argparser)
+        subparsers = create_args(prompt_argparser)
+        create_quit_parser(subparsers)
         history = LimitSizeFileHistory(get_history_file_path(), 100)
         from prompt_toolkit.lexers import PygmentsLexer
         try:
+            print('pysimpledlna v0.5.4')
+            print('用户数据目录：', get_user_data_dir())
             run_prompt(prompt_parser=prompt_argparser,
                        prompt_history=history,
                        prompt_completer=ArgParserCompleter(prompt_argparser),
                        prompt_lexer=PygmentsLexer(ArgParseLexer))
+        except KeyboardInterrupt:
+            quit_prog()
         except Exception as e:
             print(e)
         return
@@ -101,6 +106,11 @@ def main():
     finally:
         if need_server_started:
             _DLNA_SERVER.stop_server()
+
+
+def create_quit_parser(subparsers):
+    parser = subparsers.add_parser('quit', help='退出程序')
+    parser.set_defaults(func=quit_prog)
 
 
 def create_args(parser):
@@ -130,6 +140,7 @@ def create_args(parser):
     wrap_parser_exit(playlist_view_parser)
     _, playlist_rename_parser = create_playlist_rename_parser(playlist_subparsers)
     wrap_parser_exit(playlist_rename_parser)
+    return subparsers
 
 
 def wrap_parser_exit(parser: argparse.ArgumentParser):
@@ -159,7 +170,7 @@ def create_default_device_parser(subparsers):
 def create_list_parser(subparsers):
     command = 'list'
     parser = subparsers.add_parser(command, help='查找DLNA设备')
-    parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=20, type=int, help='timeout')
+    parser.add_argument('-t', '--timeout', dest='timeout', required=False, default=20, type=int, help='超时时间')
     parser.add_argument('-m', '--max', dest='max', required=False, default=99999, type=int, help='查找DLNA设备的最大数量')
     parser.add_argument('-dn', '--disable-notify', dest='disable_notify', required=False, default=False, action='store_true', help='不接收notify')
     parser.set_defaults(func=list_device)
@@ -168,11 +179,11 @@ def create_list_parser(subparsers):
 
 def create_play_parser(subparsers):
     command = 'play'
-    parser = subparsers.add_parser(command, help='play a video')
+    parser = subparsers.add_parser(command, help='播放视频')
     parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+',  help='视频文件')
     group = parser.add_mutually_exclusive_group()
 
-    group.add_argument('-u', '--url', dest='url', type=str, help='dlna device url')
+    group.add_argument('-u', '--url', dest='url', type=str, help='DLNA设备地址')
     group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False, help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=play)
     return command, parser
@@ -180,12 +191,12 @@ def create_play_parser(subparsers):
 
 def create_playlist_parser(subparsers):
     command = 'playlist'
-    return command, subparsers.add_parser(command, help='play a video')
+    return command, subparsers.add_parser(command, help='播放播放列表')
 
 
 def create_playlist_create_parser(subparsers):
     command = 'create'
-    parser = subparsers.add_parser(command, help='create playlist')
+    parser = subparsers.add_parser(command, help='创建播放列表')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.add_argument('-i', '--input', dest='input', required=True, type=str, nargs='+', help='包含目标文件的目录')
     parser.add_argument('-f', '--filter', dest='filter', required=False, type=str, help='文件过滤器')
@@ -198,7 +209,7 @@ def create_playlist_create_parser(subparsers):
 
 def create_playlist_delete_parser(subparsers):
     command = 'delete'
-    parser = subparsers.add_parser(command, help='create playlist')
+    parser = subparsers.add_parser(command, help='删除播放列表')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.set_defaults(func=playlist_delete)
 
@@ -795,12 +806,9 @@ def stop_device(device: Device):
     device.stop()
 
 
-def signal_handler(signal, frame):
-    raise ServiceExit
-
-
-class ServiceExit(Exception):
-    pass
+def quit_prog(*args):
+    _DLNA_SERVER.stop_server()
+    sys.exit(0)
 
 
 if __name__ == "__main__":
