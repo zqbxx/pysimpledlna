@@ -257,6 +257,7 @@ class PlayListWrapper:
         self.playlist_view: PlaylistVO = PlaylistVO()
         self.playlist_init_position = -1  #: 播放列表文件中播放进度
         self.playlist_init_index = -1  #: 播放列表文件中播放的视频位置
+        self.start_play = True  #: 启动是是否立即开始播放
 
     def is_sync(self):
         return self.playlist.get_playlist_name() == self.playlist_view.playlist.get_playlist_name()
