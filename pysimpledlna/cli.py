@@ -219,10 +219,9 @@ def create_playlist_delete_parser(subparsers):
 def create_playlist_play_parser(subparsers):
     command = 'play'
     parser = subparsers.add_parser(command, help='播放播放列表中的文件')
-    parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
+    parser.add_argument('-n', '--name', dest='name', required=False, type=str, help='播放列表名字')
     group = parser.add_mutually_exclusive_group()
-
-    group.add_argument('-u', '--url', dest='url', type=str, help='dlna设备地址')
+    group.add_argument('-u', '--url', dest='url', type=str, help='DLNA设备地址')
     group.add_argument('-a', '--auto-select', dest='auto_selected', action='store_true', default=False,
                        help='自动选择第一台设备作为播放设备')
     parser.set_defaults(func=playlist_play)
@@ -430,13 +429,24 @@ def playlist_play(args):
 
     dlna_server.register_device(device)
 
+    play_list = PlayListWrapper()
+    play_list.start_play = True
+
     # 初始化播放列表
+    if not hasattr(args, 'name') or args.name is None:
+        play_list.start_play = False
+        all_playlist_path = os.listdir(play_list_dir)
+        if len(all_playlist_path) == 0:
+            logger.info('没有播放列表')
+            return
+        setattr(args, 'name', Path(all_playlist_path[0]).stem)
+
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
 
-    play_list = PlayListWrapper()
+
     play_list.playlist = Playlist.get_playlist(play_list_file)
     play_list.playlist.load_playlist()
     play_list.set_vo(play_list.playlist)
@@ -520,38 +530,45 @@ def playlist_play(args):
 
     # 切换视频
     def _video_selected(old_value, new_value):
-       old_file_path = old_value[0]
-       old_file_name = old_value[1]
 
-       new_file_path = new_value[0]
-       new_file_name = new_value[1]
+        if not play_list.start_play:
+            play_list.start_play = True
+            old_file_path = get_user_data_dir()
+            old_file_name = Path(old_file_path).name
+        else:
+            old_file_path = old_value[0]
+            old_file_name = old_value[1]
 
-       # 视图显示的播放列表与内部播放列表不一致时
-       # 先将内部播放列表设置为视图播放列表
-       # 然后递归调用进行播放
-       if not play_list.is_sync():
-           play_list.playlist.save_playlist(force=True)
-           new_playlist = Playlist.get_playlist(play_list.get_view_playlist_path())
-           _setup_inner_playlist(new_playlist)
-           return _video_selected(old_value, new_value)
+        new_file_path = new_value[0]
+        new_file_name = new_value[1]
 
-       if os.path.samefile(old_file_path, new_file_path) \
-               and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] \
-               and os.path.samefile(new_file_path, ac.local_file_path):
-           if ac.player.player_status == PlayerStatus.PAUSE:
-               ac.play()
-           return True
+        # 视图显示的播放列表与内部播放列表不一致时
+        # 先将内部播放列表设置为视图播放列表
+        # 然后递归调用进行播放
+        if not play_list.is_sync():
+            current_file_path = play_list.playlist.media_list[play_list.playlist.current_index]
+            play_list.playlist.save_playlist(force=True)
+            new_playlist = Playlist.get_playlist(play_list.get_view_playlist_path())
+            _setup_inner_playlist(new_playlist)
+            return _video_selected([current_file_path, Path(current_file_path).name], new_value)
 
-       if not os.path.samefile(old_file_path, new_file_path) \
-               or not os.path.samefile(new_file_path, ac.local_file_path):
-           selected_index = player.playlist_part.get_selected_index()
+        if os.path.samefile(old_file_path, new_file_path) \
+                and ac.player.player_status in [PlayerStatus.PLAY, PlayerStatus.PAUSE] \
+                and os.path.samefile(new_file_path, ac.local_file_path):
+            if ac.player.player_status == PlayerStatus.PAUSE:
+                ac.play()
+            return True
 
-           ac.current_idx = selected_index
-           ac.play()
-       else:
-           play_list.playlist.load_playlist()
-           _setup_playlist(play_list.playlist)
-           ac.play()
+        if not os.path.samefile(old_file_path, new_file_path) \
+                or not os.path.samefile(new_file_path, ac.local_file_path):
+            selected_index = player.playlist_part.get_selected_index()
+
+            ac.current_idx = selected_index
+            ac.play()
+        else:
+            play_list.playlist.load_playlist()
+            _setup_playlist(play_list.playlist)
+            ac.play()
 
     # 初始化web ui
     from pysimpledlna.web import WebRoot, DLNAService
@@ -703,7 +720,9 @@ def playlist_play(args):
     device.start_sync_remote_player_status()
 
     with patch_stdout():
-        ac.play()
+        
+        if play_list.start_play:
+            ac.play()
 
         try:
             while True:
