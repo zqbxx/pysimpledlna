@@ -61,6 +61,7 @@ class SimpleDLNAServer():
         self.cert_file = cert_file
         self.key_file = key_file
         self.device_count = 0
+        self.server_id = random_str()
 
     def start_server(self):
         init_event = threading.Event()
@@ -98,9 +99,9 @@ class SimpleDLNAServer():
 
     def get_server_file_path(self, device, key: str):
         if self.is_ssl_enabled:
-            file_url = "https://{0}:{1}/device/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, key)
+            file_url = "https://{0}:{1}/device/{2}/{3}?serverid={4}".format(self.server_ip, self.server_port, device.device_key, key, self.server_id)
         else:
-            file_url = "http://{0}:{1}/device/{2}/{3}".format(self.server_ip, self.server_port, device.device_key, key)
+            file_url = "http://{0}:{1}/device/{2}/{3}?serverid={4}".format(self.server_ip, self.server_port, device.device_key, key, self.server_id)
         return file_url
 
     def parse_xml(self, url):
