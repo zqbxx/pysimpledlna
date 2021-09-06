@@ -152,13 +152,13 @@ class ActionController:
             self.player.draw()
 
     def _test_occupied(self):
-        url = self.server_file_path
+        url = self.dlna_render_file_path
         parsed_url = urlparse(url)
         params = parse_qs(parsed_url.query)
         if 'serverid' in params:
             server_id = params['serverid']
             return server_id == self.device.dlna_server.server_id
-        return False
+        return True
 
     def get_max_video_position(self):
         return self.current_video_duration - 2 * self.device.sync_remote_player_interval
