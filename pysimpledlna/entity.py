@@ -378,8 +378,6 @@ class Settings:
             return {}    # empty dict
 
     def write(self) -> None:
-        if self.d == self.original:
-            return
         self._make_dir()
         with open(self.file_path, "w", encoding='utf-8') as f:
             json.dump(self.d, f, indent=2)

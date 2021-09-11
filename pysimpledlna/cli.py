@@ -259,7 +259,7 @@ def create_playlist_update_parser(subparsers):
 
 def create_playlist_view_parser(subparsers):
     command = 'view'
-    parser = subparsers.add_parser(command, help='更新播放列表')
+    parser = subparsers.add_parser(command, help='查看播放列表')
     parser.add_argument('-n', '--name', dest='name', required=True, type=str, help='播放列表名字')
     parser.set_defaults(func=playlist_view)
     return command, parser
@@ -420,7 +420,11 @@ def playlist_play(args):
                 for default_device_url in default_device_urls:
                     device = dlna_server.find_device(default_device_url)
                     if device is not None:
+                        default_device_urls.remove(default_device_url)
+                        default_device_urls.insert(0, default_device_url)
+                        settings.write()
                         break
+
         else:
             device = dlna_server.parse_xml(url)
     if device is None:
@@ -445,7 +449,6 @@ def playlist_play(args):
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
         return
-
 
     play_list.playlist = Playlist.get_playlist(play_list_file)
     play_list.playlist.load_playlist()
