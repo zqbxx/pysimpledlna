@@ -75,9 +75,6 @@ mui.ready(function() {
     }
     updateSeekInfo(0, global.currentVideo.position);
     let seekBtnFunc = function() {
-    	/*if (global.isLocal) {
-	        return;
-	    }*/
 	    position = -1;
 	    duration = -1;
 	    if (global.isLocal) {
@@ -354,9 +351,9 @@ mui.ready(function() {
             document.getElementById('stopVideo').disabled = enable;
             document.getElementById('morePlaylist').disabled = enable;
 
-            [].forEach.call(document.querySelectorAll('#video-file-list > li > button'), function(btn) {
+            /*[].forEach.call(document.querySelectorAll('#video-file-list > li > button'), function(btn) {
               btn.disabled = enable;
-            });
+            });*/
         }
 
         thisElement = this;
@@ -468,6 +465,25 @@ mui.ready(function() {
 
     }
 
+    function playVideoLocal(index) {
+        global.chimee.exitFullscreen();
+        if (index > global.currentPlaylist.videoList.length - 1) {
+            chimee.pause()
+        }
+        let videoName = global.currentPlaylist.videoList[index];
+        destroyChimee();
+        global.chimee = createChimee();
+        showVideoPlayer(global.chimee, 0, index, true);
+        global.chimee.load(global.apiUrl
+            + '?index=' + index
+            + '&command=playAtApp&r=' + new Date().getTime());
+        updateLocalData({
+            currentPlaylist: { index: index, },
+            currentVideo: { name: videoName, }
+        });
+
+    }
+
     function destroyChimee() {
         global.chimee.destroy();
         global.chimee = undefined;
@@ -491,7 +507,6 @@ mui.ready(function() {
             var targetEle = document.querySelector('ul#video-file-list li button.mui-btn.fa.mui-btn-danger');
             zenscroll.center(targetEle, 0)
         }, 1);
-
     });
 
     function createPlaylistVideos(file_name_list, index) {
@@ -521,9 +536,14 @@ mui.ready(function() {
             btn.addEventListener('tap', function() {
                 currentIndex = -1;
                 if (hasClass(this, 'fa-play')) {
-                    currentIndex = this.getAttribute('videoIndex');
+                    currentIndex = parseInt(this.getAttribute('videoIndex'));
                 }
-                playVideo(currentIndex, this.getAttribute('videoName'), global.viewPlaylist.name);
+                if (global.isLocal) {
+                    playVideoLocal(currentIndex);
+                } else {
+                    playVideo(currentIndex, this.getAttribute('videoName'), global.viewPlaylist.name);
+                }
+
             });
             videoFileList.appendChild(li);
         }
