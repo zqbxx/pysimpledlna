@@ -39,8 +39,9 @@ UPNP_DEFAULT_SERVICE_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
 
 _Resource = TypeVar("_Resource", bound="Resource")
 
-logger = logging.getLogger('pysimpledlna.dlna')
-logger.setLevel(logging.INFO)
+
+def get_logger():
+    return logging.getLogger('pysimpledlna.dlna')
 
 
 class SimpleDLNAServer():
@@ -696,8 +697,10 @@ class EasyThread(threading.Thread):
         self.__current_status = ThreadStatus.STOPPED
 
         self.stophook = None
+        self.logger = get_logger()
 
     def run(self):
+        logger = self.logger
         try:
             while self.__running.isSet():
                 logger.debug('thread waiting...')
@@ -713,16 +716,16 @@ class EasyThread(threading.Thread):
             self.__current_status = ThreadStatus.STOPPED
 
     def pause(self):
-        logger.debug('set thread to pause')
+        self.logger.debug('set thread to pause')
         self.__current_status = ThreadStatus.PAUSED
         self.__flag.clear() # Set to False to block the thread
 
     def resume(self):
-        logger.debug('set thread to resume')
+        self.logger.debug('set thread to resume')
         self.__flag.set() # Set to True, let the thread stop blocking
 
     def stop(self, stophook=None):
-        logger.debug('set thread to stop')
+        self.logger.debug('set thread to stop')
         self.stophook = stophook
         self.__flag.set() # Resume the thread from the suspended state, if it is already suspended
         self.__running.clear() # Set to False
@@ -755,6 +758,8 @@ class DlnaDeviceSyncThread(EasyThread):
             time.sleep(wait_seconds)
 
     def do_it(self):
+
+        logger = self.logger
 
         start = time.time()
         transport_info = None

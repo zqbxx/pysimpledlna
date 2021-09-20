@@ -4,23 +4,12 @@ import sys
 import time
 import signal
 import logging
+import logging.config
 import traceback
 from typing import List, Tuple
 from pathlib import Path
 
 from pysimpledlna.ui.playlist import PlayListEditor
-
-logging.basicConfig(  # filename=,
-    format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
-    datefmt='%H:%M:%S',
-    level=logging.INFO,
-    handlers=[
-        # logging.StreamHandler(),
-        logging.FileHandler('log.txt'),
-    ], )
-
-logger = logging.getLogger('pysimpledlna.cli')
-logger.setLevel(logging.INFO)
 
 
 import os
@@ -28,7 +17,7 @@ from pysimpledlna import SimpleDLNAServer, Device
 from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
     get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path,
-    get_history_file_path, is_in_prompt_mode, is_in_nuitka, start_subprocess)
+    get_history_file_path, is_in_prompt_mode, is_in_nuitka, start_subprocess, get_log_file_path, get_log_file_dir)
 from pysimpledlna.entity import LocalFilePlaylist, Settings, LocalTempFilePlaylist, PlayListWrapper, Playlist
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
@@ -44,6 +33,8 @@ NO_SERVER_ACTION = []
 
 
 def main():
+    init_logger()
+    logger = get_logger()
 
     for action in [config,
                    list_device,
@@ -62,6 +53,7 @@ def main():
     create_args(parser)
 
     args = parser.parse_args()
+    logger.info(args)
 
     if not hasattr(args, 'func'):
         from prompt_toolkit_ext import PromptArgumentParser, run_prompt, LimitSizeFileHistory
@@ -73,8 +65,11 @@ def main():
         history = LimitSizeFileHistory(get_history_file_path(), 100)
         from prompt_toolkit.lexers import PygmentsLexer
         try:
-            print('pysimpledlna v0.5.4')
+            print('=' * 80)
+            print('pysimpledlna v0.5.4', '投屏工具')
             print('用户数据目录：', get_user_data_dir())
+            print('日志文件：', get_log_file_path())
+            print('=' * 80)
             run_prompt(prompt_parser=prompt_argparser,
                        prompt_history=history,
                        prompt_completer=ArgParserCompleter(prompt_argparser),
@@ -82,6 +77,7 @@ def main():
         except KeyboardInterrupt:
             quit_prog()
         except Exception as e:
+            logger.info(traceback.format_exc())
             print(e)
         return
 
@@ -370,6 +366,8 @@ def playlist_list(args):
 
 
 def playlist_play(args):
+
+    logger = get_logger()
 
     if is_in_prompt_mode(args):
         try:
@@ -743,6 +741,7 @@ def playlist_play(args):
 
 
 def playlist_refresh(args):
+    logger = get_logger()
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
@@ -755,6 +754,7 @@ def playlist_refresh(args):
 
 
 def playlist_update(args):
+    logger = get_logger()
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
@@ -776,6 +776,7 @@ def playlist_update(args):
 
 
 def playlist_view(args):
+    logger = get_logger()
     play_list_file = get_playlist_file_path(args)
     if not os.path.exists(play_list_file):
         logger.info('播放列表[' + args.name + '][' + play_list_file + ']不存在')
@@ -831,6 +832,20 @@ def stop_device(device: Device):
 def quit_prog(*args):
     _DLNA_SERVER.stop_server()
     sys.exit(0)
+
+
+def init_logger():
+    configure = get_abs_path('./logging.json')
+    log_dir = Path(get_log_file_dir())
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = get_log_file_path().replace('\\', '/')
+    config_text = configure.read_text(encoding='utf-8').replace('{log_file}', log_file)
+    config_dict = json.loads(config_text)
+    logging.config.dictConfig(config_dict)
+
+
+def get_logger():
+    return logging.getLogger('pysimpledlna.cli')
 
 
 if __name__ == "__main__":

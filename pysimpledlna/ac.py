@@ -14,9 +14,8 @@ from prompt_toolkit_ext.event import Event
 import traceback
 
 
-logger = logging.getLogger('pysimpledlna.ac')
-logger.setLevel(logging.INFO)
-
+def get_logger():
+    return logging.getLogger('pysimpledlna.ac')
 
 class ActionController:
 
@@ -54,6 +53,7 @@ class ActionController:
         }
 
         self.enable_hook = True
+        self.logger = get_logger()
 
     def stop_device(self):
         self.device.stop_sync_remote_player_status()
@@ -65,6 +65,9 @@ class ActionController:
         self.player.draw()
 
     def hook(self, type, old_value, new_value):
+
+        logger = self.logger
+
         if not self.enable_hook:
             return
         logger.debug('type: ' + type + ' old:' + str(old_value) + ' new:' + str(new_value))
@@ -164,7 +167,7 @@ class ActionController:
         return self.current_video_duration - 2 * self.device.sync_remote_player_interval
 
     def play_next(self):
-        logger.debug(f'ac.play_next, caller: {traceback.extract_stack()[-2][2]}')
+        self.logger.debug(f'ac.play_next, caller: {traceback.extract_stack()[-2][2]}')
         self.current_idx += 1
         self.play()
         self.events['play_next'].fire(self.current_idx)
@@ -193,7 +196,7 @@ class ActionController:
         self.device.set_AV_transport_URI(self.server_file_path)
 
     def play(self):
-        logger.debug(f'ac.play, caller: {traceback.extract_stack()[-2][2]}')
+        self.logger.debug(f'ac.play, caller: {traceback.extract_stack()[-2][2]}')
         self.enable_hook = False
 
         if not self.validate_current_index():
@@ -246,6 +249,7 @@ class ActionController:
             self.device.stop()
 
     def validate_current_index(self):
+        logger = self.logger
         logger.debug(f'current_index: {self.current_idx}')
         if self.current_idx >= len(self.play_list.playlist.media_list):
             self.current_idx = len(self.play_list.playlist.media_list) - 1
@@ -288,7 +292,7 @@ class ActionController:
             if is_playing and time_changed and is_same_file:
                 return
 
-            logger.debug(f'waiting for device: {str(i)}')
+            self.logger.debug(f'waiting for device: {str(i)}')
             dur = time.time() - start
             if dur >= 1:
                 continue

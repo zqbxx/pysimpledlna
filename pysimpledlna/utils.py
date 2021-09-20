@@ -1,7 +1,6 @@
 import random
 import subprocess
 from pathlib import Path
-from typing import List
 from xml.dom.minidom import Childless
 import time
 import os
@@ -29,11 +28,11 @@ def get_abs_path(rel_path=None) -> Path:
 
     if is_in_nuitka():
         if rel_path is not None:
-            return Path(os.environ.get('nuitka_exe_dir')) / Path(rel_path)
+            return (Path(os.environ.get('nuitka_exe_dir')) / Path(rel_path)).absolute()
         else:
-            return Path(os.environ.get('nuitka_exe_dir'))
+            return Path(os.environ.get('nuitka_exe_dir')).absolute()
     elif rel_path is not None:
-        return Path(rel_path)
+        return Path(rel_path).absolute()
     else:
         return Path('.').absolute()
 
@@ -92,6 +91,13 @@ def get_playlist_dir(base, playlist):
         os.makedirs(full_path)
     return os.path.abspath(full_path)
 
+
+def get_log_file_path():
+    return str((Path(get_user_data_dir()) / Path('./logs/log.txt')).absolute())
+
+
+def get_log_file_dir():
+    return os.path.join(get_user_data_dir(), 'logs')
 
 def get_desktop_dir():
 
