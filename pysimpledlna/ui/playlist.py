@@ -47,7 +47,8 @@ class PlayListPlayer(Progress):
 
     def __init__(self,
                  playlist_wrapper: PlayListWrapper,
-                 playlistlist_part: RadioList,
+                 playlistlist_data: List,
+                 #playlistlist_part: RadioList,
                  top_text: Tuple[str] = None,
                  title: AnyFormattedText = None,
                  formatters: Optional[Sequence[Formatter]] = None,
@@ -83,7 +84,7 @@ class PlayListPlayer(Progress):
         self.playlist_wrapper = playlist_wrapper
         self.playlist_part: RadioList = RadioList(values=self.playlist_wrapper.playlist_player_view)
         self.playlist_part.set_checked_index(self.playlist_wrapper.playlist_player_view.playlist.current_index)
-        self.playlistlist_part: RadioList = playlistlist_part
+        self.playlistlist_part: RadioList = RadioList(values=[('', '')])
         self.top_text: Tuple[str] = top_text
 
         self.player_events = {

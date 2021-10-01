@@ -452,8 +452,7 @@ def playlist_play(args):
     play_list.playlist.load_playlist()
     play_list.set_vo(play_list.playlist)
 
-    playlist_list_contents = RadioList(values=[('', '')])
-    player = PlayListPlayer(play_list, playlist_list_contents)
+    player = PlayListPlayer(play_list, [('', '')])
 
     player_model: PlayerModel = player.create_model()
     ac = ActionController(play_list, device, player_model)
@@ -487,11 +486,11 @@ def playlist_play(args):
 
     def _setup_playlist_list(selected_name):
         playlist_list = _get_playlist_list()
-        playlist_list_contents.values = playlist_list
+        player.playlistlist_part.values = playlist_list
         for index, playlist in enumerate(playlist_list):
             playlist_name = playlist[1]
             if playlist_name == selected_name:
-                playlist_list_contents.set_checked_index(index)
+                player.playlistlist_part.set_checked_index(index)
                 break
 
     _setup_playlist_list(args.name)
@@ -695,7 +694,7 @@ def playlist_play(args):
 
     # 加入事件监听
     player.playlist_part.check_event += _video_selected
-    playlist_list_contents.check_event += _playlist_selected
+    player.playlistlist_part.check_event += _playlist_selected
 
     # TODO 事件没有被调用，待查
     player.player_events['quit'] += _quit
