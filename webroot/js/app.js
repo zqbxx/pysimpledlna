@@ -1,4 +1,3 @@
-//window.onerror = function (msg) { alert(msg) }
 mui.init();
 mui.ready(function() {
     
@@ -60,6 +59,15 @@ mui.ready(function() {
 	        noSleep.enable()
 	    } else {
 	        noSleep.disable();
+	    }
+	});
+
+	var vConsoleToggle = document.getElementById('vConsoleToggle')
+	vConsoleToggle.addEventListener('toggle', function(event) {
+	    if (event.detail.isActive) {
+	        vConsole.showSwitch()
+	    } else {
+	        vConsole.hideSwitch()
 	    }
 	});
 

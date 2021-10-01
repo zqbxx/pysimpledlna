@@ -16,6 +16,25 @@
 		<link rel="stylesheet" type="text/css" href="./css/chimee-mobile-player.browser.css"/>
 		<!--App自定义的css-->
 		<link rel="stylesheet" type="text/css" href="./css/app.css?v={randomstr}" />
+		<script src="./js/vconsole.min.js"></script>
+		<script>
+
+        	var vConsole = new VConsole({
+				disableLogScrolling: false,
+				onReady: function() {
+					vConsole.hideSwitch();
+				},
+			});
+        	console.log('Hello world');
+        	window.onerror = function (msg, url, lineNo, columnNo, error) {
+				console.log('msg:', msg);
+				console.log('url:', url);
+				console.log('lineNo:', lineNo);
+				console.log('columnNo:', columnNo);
+				console.log('error:', error);
+				return false;
+			};
+    	</script>
 	</head>
 
 	<body>
@@ -99,6 +118,12 @@
 								<div class="mui-switch-handle"></div>
 							</div>
 						</li>
+						<li class="mui-table-view-cell">
+							<span>显示调试</span>
+							<div id='vConsoleToggle' class="mui-switch">
+								<div class="mui-switch-handle"></div>
+							</div>
+						</li>
 					</ul>
 				</div>
 			</div>
@@ -157,7 +182,6 @@
 		<script src="./js/zenscroll-min.js"></script>
 		<script src="./js/utils.js?v={randomstr}"></script>
 		<script src="./js/app.js?v={randomstr}"></script>
-
 	</body>
 
 </html>
