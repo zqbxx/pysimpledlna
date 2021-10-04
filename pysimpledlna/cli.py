@@ -18,7 +18,8 @@ from pysimpledlna.ac import ActionController
 from pysimpledlna.utils import (
     get_playlist_dir, get_user_data_dir, get_free_tcp_port, get_setting_file_path, is_tcp_port_occupied, get_abs_path,
     get_history_file_path, is_in_prompt_mode, is_in_nuitka, start_subprocess, get_log_file_path, get_log_file_dir)
-from pysimpledlna.entity import LocalFilePlaylist, Settings, LocalTempFilePlaylist, PlayListWrapper, Playlist
+from pysimpledlna.entity import LocalFilePlaylist, Settings, LocalTempFilePlaylist, PlayListWrapper, Playlist, \
+    DeviceList
 
 _DLNA_SERVER_PORT = get_free_tcp_port()
 settings = Settings(get_setting_file_path())
@@ -399,6 +400,7 @@ def playlist_play(args):
     from pysimpledlna.ui.terminal import PlayerStatus
     from prompt_toolkit.patch_stdout import patch_stdout
     from prompt_toolkit import HTML
+    from prompt_toolkit_ext.event import KeyEvent
 
     dlna_server = _DLNA_SERVER
     user_dir = get_user_data_dir()
@@ -429,7 +431,7 @@ def playlist_play(args):
         print('No Device available')
         return
 
-    dlna_server.register_device(device)
+    device = dlna_server.register_device(device)
 
     play_list = PlayListWrapper()
     play_list.start_play = True
@@ -452,7 +454,9 @@ def playlist_play(args):
     play_list.playlist.load_playlist()
     play_list.set_vo(play_list.playlist)
 
-    player = PlayListPlayer(play_list, [('', '')])
+    device_list: DeviceList = DeviceList([device], 0)
+
+    player = PlayListPlayer(play_list, [('', '')], device_list)
 
     player_model: PlayerModel = player.create_model()
     ac = ActionController(play_list, device, player_model)
@@ -586,6 +590,100 @@ def playlist_play(args):
     player.create_ui()
 
     # 事件处理
+    # 刷新dlna设备列表
+    def _refresh_device_list(event: KeyEvent):
+
+        import threading
+        from threading import Timer
+
+        def do_refresh():
+
+            if player.is_refresh_dlna_render:
+                return
+
+            player.is_refresh_dlna_render = True
+            loading_char = ['▏', '▎', '▍', '▌', '▋', '▊', '▉']
+
+            def update_title(index):
+                player.dlna_render_part.title = 'DLNA显示器 ' + loading_char[index % 7]
+                if player.is_refresh_dlna_render:
+                    t = Timer(0.5, update_title, args=[(index+1) % 7])
+                    t.start()
+                else:
+                    player.dlna_render_part.title = 'DLNA显示器'
+
+            update_title(0)
+
+            def find_device_by_location(devices: List[Device], location: str):
+                for device in devices:
+                    if device.location == location:
+                        return device
+                return None
+
+            try:
+                old_device_list = device_list.device_list
+                result: List[Device] = list()
+                for device in dlna_server.get_devices(60):
+                    known_device = dlna_server.register_device(device)
+                    result.append(known_device)
+
+                # 根据已知的设备地址查询遗漏的设备
+                for known_device in dlna_server.known_devices.values():
+                    d = find_device_by_location(result, known_device.location)
+                    if d is None:
+                        new_device = dlna_server.find_device(known_device.location)
+                        if new_device is not None:
+                            result.append(known_device)
+
+                device_list.device_list = result
+
+                # 设置当前使用的设备
+                selected_device = old_device_list[device_list.selected_index]
+                result = device_list.set_selected_index(selected_device)
+                if result == -1:
+                    device_list.selected_index = 0
+
+                player.update_dlna_render_part()
+            finally:
+                player.is_refresh_dlna_render = False
+                player.dlna_render_part.title = 'DLNA显示器'
+
+        threading.Thread(target=do_refresh, daemon=True).start()
+
+    # 切换dlna设备
+    def _dlna_device_selected(old_value, new_value):
+        old_device_key = old_value[0]
+        new_device_key = new_value[0]
+        if old_device_key == new_device_key:
+            return
+        old_device = device_list.get_device_by_device_key(old_device_key)
+        new_device = device_list.get_device_by_device_key(new_device_key)
+
+        start_play = True
+        if old_device.sync_thread is None or old_device.sync_thread.last_status is None \
+                or old_device.sync_thread.last_status.get('transport_info') is None:
+            start_play = False
+        else:
+            current_transport_state = old_device.sync_thread.last_status['transport_info']['CurrentTransportState']
+            if current_transport_state != 'PLAYING':
+                start_play = False
+
+        device_list.set_selected_index(new_device)
+        positionhook, transportstatehook, exceptionhook = old_device.positionhook, old_device.transportstatehook, old_device.exceptionhook
+        old_device.set_sync_hook(None, None, None)
+        old_device.stop()
+        old_device.stop_sync_remote_player_status()
+
+        play_list.playlist.save_playlist(force=True)
+
+        ac.init_ac(new_device)
+        _setup_inner_playlist(play_list.playlist)
+        if start_play:
+            ac.play()
+
+        new_device.set_sync_hook(positionhook, transportstatehook, exceptionhook)
+        new_device.start_sync_remote_player_status()
+
     # 更新播放列表选中项位置，如果视图被切换则不进行更新视频列表内容
     def _update_list_ui(current_index):
         if play_list.is_sync():
@@ -695,10 +793,12 @@ def playlist_play(args):
     # 加入事件监听
     player.playlist_part.check_event += _video_selected
     player.playlistlist_part.check_event += _playlist_selected
+    player.dlna_render_radio.check_event += _dlna_device_selected
 
     # TODO 事件没有被调用，待查
     player.player_events['quit'] += _quit
 
+    player.player_events['refresh_dlna_render'] += _refresh_device_list
     player.controller_events['pause'] += \
         lambda e: ac.resume() if player_model.player_status == PlayerStatus.PAUSE else ac.pause()
     player.controller_events['last'] += _last

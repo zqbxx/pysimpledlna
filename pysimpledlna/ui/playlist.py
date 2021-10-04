@@ -29,6 +29,7 @@ from prompt_toolkit_ext.event import KeyEvent
 from prompt_toolkit.layout.dimension import AnyDimension, D, Dimension
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 
+from pysimpledlna import Device
 from pysimpledlna.ui.terminal import PlayerStatus
 from prompt_toolkit.shortcuts.progress_bar.formatters import Formatter, Text
 import abc
@@ -40,7 +41,7 @@ from prompt_toolkit.widgets import Box, Label, SearchToolbar, TextArea, Dialog, 
 from typing import Optional, Sequence, Tuple
 import logging
 
-from pysimpledlna.entity import LocalFilePlaylist, PlayListWrapper
+from pysimpledlna.entity import LocalFilePlaylist, PlayListWrapper, DeviceList
 
 
 class PlayListPlayer(Progress):
@@ -48,7 +49,7 @@ class PlayListPlayer(Progress):
     def __init__(self,
                  playlist_wrapper: PlayListWrapper,
                  playlistlist_data: List,
-                 #playlistlist_part: RadioList,
+                 dlna_device_list: DeviceList,
                  top_text: Tuple[str] = None,
                  title: AnyFormattedText = None,
                  formatters: Optional[Sequence[Formatter]] = None,
@@ -58,7 +59,7 @@ class PlayListPlayer(Progress):
                  color_depth: Optional[ColorDepth] = None,
                  output: Optional[Output] = None,
                  input: Optional[Input] = None,
-                 webcontrol_url: str=''
+                 webcontrol_url: str = ''
                  ) -> None:
 
         if formatters is None:
@@ -77,6 +78,7 @@ class PlayListPlayer(Progress):
         super().__init__(title, formatters, bottom_toolbar, style, None, file, color_depth, output, input)
         self.bottom_part = None
         self.top_part = None
+        self.left_part = None
         self.progress_controls_part = None
         self.player_controls_part = None
         self.player_controls_keybindings = None
@@ -84,14 +86,21 @@ class PlayListPlayer(Progress):
         self.playlist_wrapper = playlist_wrapper
         self.playlist_part: RadioList = RadioList(values=self.playlist_wrapper.playlist_player_view)
         self.playlist_part.set_checked_index(self.playlist_wrapper.playlist_player_view.playlist.current_index)
-        self.playlistlist_part: RadioList = RadioList(values=[('', '')])
+        self.playlistlist_part: RadioList = RadioList(values=playlistlist_data)
+        self.dlna_device_list = dlna_device_list
+        self.dlna_render_radio = RadioList(values=[('', '')])
+        self.dlna_render_part:Frame = None
+        self.is_refresh_dlna_render = False
+        self.update_dlna_render_part()
         self.top_text: Tuple[str] = top_text
 
         self.player_events = {
             'quit': KeyEvent('q'),
+            'refresh_dlna_render': KeyEvent('r'),
             'focus_playlistlist': KeyEvent('b'),
             'focus_playlist': KeyEvent('n'),
             'focus_controller': KeyEvent('m'),
+            'focus_dlna_render': KeyEvent('v')
         }
         self.player_events['quit'].threads = 1
 
@@ -112,10 +121,21 @@ class PlayListPlayer(Progress):
         self.event_thread = None
 
         self.webcontrol_url = webcontrol_url
+        self.webcontrol_url_label:Label = None
 
     def update_playlist_part(self):
         self.playlist_part.values = self.playlist_wrapper.playlist_player_view
         self.playlist_part.set_checked_index(self.playlist_wrapper.playlist_player_view.playlist.current_index)
+
+    def update_dlna_render_part(self):
+        radio_data = list()
+        for d in self.dlna_device_list.device_list:
+            radio_data.append([d.device_key, d.friendly_name + '\n' + d.location])
+        self.dlna_render_radio.values = radio_data
+        self.dlna_render_radio.set_checked_index(self.dlna_device_list.selected_index)
+
+    def update_webcontrol_url_label(self):
+        self.webcontrol_url_label.text = self.webcontrol_url
 
     def is_accept_key_press(self):
         return (time.time() - self.last_key_press_time) > self.min_key_press_interval
@@ -147,7 +167,7 @@ class PlayListPlayer(Progress):
                 key_bindings=self.player_controls_keybindings,
                 focusable=True,
             )
-
+        self.webcontrol_url_label = Label(text=self.webcontrol_url, style="class:bottom-toolbar")
         self.player_controls_part = HSplit([
                 VSplit([
                     Label(text="[PgUp] 上一个"),
@@ -162,7 +182,7 @@ class PlayListPlayer(Progress):
                         dont_extend_height=True,
                     ),
                 ]),
-                Label(text=self.webcontrol_url, style="class:bottom-toolbar"),
+                self.webcontrol_url_label,
                 Label(text=self._get_pressed_key_str, style="class:bottom-toolbar"),
             ])
 
@@ -175,7 +195,6 @@ class PlayListPlayer(Progress):
             self.player_controls_part,
         ]))
 
-        #self.bottom_part = Box(self.playlist_part, height=Dimension(), width=Dimension())
         self.bottom_part = Frame(
             title="视频文件",
             body=Box(self.playlist_part, height=Dimension(), width=Dimension()),
@@ -190,14 +209,25 @@ class PlayListPlayer(Progress):
                              #Window(height=1, char="-"),
                              self.bottom_part],
                             width=Dimension()))
-        body = VSplit([
+        dlna_render_list_title = "DLNA显示器"
+        self.dlna_render_part = Frame(
+                title=dlna_render_list_title,
+                body=Box(self.dlna_render_radio, height=Dimension(), width=Dimension()),
+                width=30,
+                height=Dimension()
+            )
+        self.left_part = HSplit([
             Frame(
                 title="播放列表",
                 body=Box(self.playlistlist_part, height=Dimension(), width=Dimension()),
                 width=30,
                 height=Dimension()
             ),
-            #Window(width=1, char="|", style="class:line"),
+            self.dlna_render_part,
+        ])
+
+        body = VSplit([
+            self.left_part,
             VSplit(parts),
         ])
         return body
@@ -234,6 +264,16 @@ class PlayListPlayer(Progress):
         def _(event):
             self.app.layout.focus(self.playlistlist_part)
             self.player_events['focus_playlistlist'].fire(event)
+
+        @player_kb.add(self.player_events['focus_dlna_render'].key)
+        def _(event):
+            self.app.layout.focus(self.dlna_render_radio)
+            self.player_events['focus_dlna_render'].fire(event)
+
+        @player_kb.add(self.player_events['refresh_dlna_render'].key)
+        def _(event):
+            self.app.layout.focus(self.dlna_render_radio)
+            self.player_events['refresh_dlna_render'].fire(event)
 
         self.key_bindings = player_kb
 

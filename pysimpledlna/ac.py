@@ -23,9 +23,21 @@ class ActionController:
     自己实现连续播放多个文件的功能，部分DLNA设备没有实现用于连续播放的接口
     '''
     def __init__(self, play_list: PlayListWrapper, device: Device, player=Player()):
-        self.current_idx = 0
-        #self.file_list: List[str] = file_list
+        self.logger = get_logger()
         self.play_list: PlayListWrapper = play_list
+        self.player = player
+        self.init_ac(device)
+        self.events = {
+            'play_next': Event(),
+            'play_last': Event(),
+            'play': Event(),
+            'stop': Event(),
+            'resume': Event(),
+            'video_position': Event(),
+        }
+
+    def init_ac(self, device:Device):
+        self.current_idx = 0
         self.device = device
 
         self.current_video_position = 0
@@ -36,24 +48,10 @@ class ActionController:
 
         self.local_file_path = ''  #: 当前正在投屏的文件本地地址
         self.server_file_path = ''  #: 当前正在投屏的文件本地地址对应的web地址
-        self.dlna_render_file_path = '' #: dlna显示器正在播放的文件地址
+        self.dlna_render_file_path = ''  #: dlna显示器正在播放的文件地址
         self.is_occupied = False  #: 投屏是否被其他程序占用
-
-        self.player = player
-
         self.end = False
-
-        self.events = {
-            'play_next': Event(),
-            'play_last': Event(),
-            'play': Event(),
-            'stop': Event(),
-            'resume': Event(),
-            'video_position': Event(),
-        }
-
         self.enable_hook = True
-        self.logger = get_logger()
 
     def stop_device(self):
         self.device.stop_sync_remote_player_status()

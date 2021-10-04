@@ -7,6 +7,34 @@ from copy import deepcopy
 from pathlib import Path
 from typing import List, Dict, Union, Tuple, Sequence, Iterator, Any
 
+from pysimpledlna import Device
+
+
+class DeviceList:
+
+    def __init__(self, device_list: List[Device], selected_index: int):
+        self.device_list = device_list
+        self.selected_index = selected_index
+
+    def get_device_by_device_key(self, device_key: str):
+        for device in self.device_list:
+            if device.device_key == device_key:
+                return device
+        return None
+
+    def get_device_by_location(self, location: str):
+        for device in self.device_list:
+            if device.location == location:
+                return device
+        return None
+
+    def set_selected_index(self, selected_device: Device):
+        for index, device in enumerate(self.device_list):
+            if device.location == selected_device.location:
+                self.selected_index = index
+                return self.selected_index
+        return -1
+
 
 class Playlist:
 

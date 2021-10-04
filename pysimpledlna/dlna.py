@@ -186,8 +186,9 @@ class SimpleDLNAServer():
             device_dict = dict(map(serialize, filter(lambda x: x.count(":") >= 1, data.decode().split("\r\n"))))
 
             if "AVTransport" in device_dict["st"]:
-                device = self.register_device(self.parse_xml(device_dict["location"]))
-                if device is not None:
+                device = self.parse_xml(device_dict["location"])
+                if not self.device_exists(device):
+                    device = self.register_device(device)
                     yield device
 
     def _from_notify(self, timeout):
@@ -241,9 +242,11 @@ class SimpleDLNAServer():
                 continue
 
             if "AVTransport" in device_dict["st"]:
-                device = self.register_device(self.parse_xml(device_dict["location"]))
-                if device is not None:
+                device = self.parse_xml(device_dict["location"])
+                if not self.device_exists(device):
+                    device = self.register_device(device)
                     yield device
+
 
     def _notify_received(self, headers:Dict[str, str])->Dict[str, str]:
         if headers['nts'] == 'ssdp:alive':
@@ -270,14 +273,20 @@ class SimpleDLNAServer():
         if device is not None:
             for kd in self.known_devices.values():
                 if kd.location == device.location:
-                    return None
+                    return kd
             self.known_devices[device.device_key] = device
+            device.video_files = self.get_device_root(device)
         return device
+
+    def device_exists(self, device):
+        for kd in self.known_devices.values():
+            if kd.location == device.location:
+                return True
+        return False
 
     def find_device(self, location_url):
         device = self.parse_xml(location_url)
-        self.register_device(device)
-        return device
+        return self.register_device(device)
 
     def send_dlna_action(self, data, device, action):
 
@@ -330,7 +339,8 @@ class Device():
         self.exceptionhook = exceptionhook
         self.sync_remote_player_interval = sync_remote_player_interval
 
-        self.video_files = self.dlna_server.get_device_root(self)
+        #self.video_files = self.dlna_server.get_device_root(self)
+        self.video_files = None
 
         self.sync_thread = DlnaDeviceSyncThread(self, interval=self.sync_remote_player_interval)
 
@@ -739,7 +749,7 @@ class DlnaDeviceSyncThread(EasyThread):
     def __init__(self, device: Device, last_status=None, interval=1):
         EasyThread.__init__(self)
         self.device = device
-        self.last_status = last_status
+        self.last_status:Dict = last_status
         self.interval = interval
         self.count = 0
 

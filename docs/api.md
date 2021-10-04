@@ -15,6 +15,8 @@ for i, d in enumerate(server.get_devices(5)):
 if device is None:
     print('没有找到播放设备')
     sys.exit()
+# 服务器根据device key创建资源
+server.register_device(device)
 # 将文件添加到服务器中，返回一个http协议的地址
 file_url = device.add_file(r'E:\video\file.mp4')
 # 设置播放文件
