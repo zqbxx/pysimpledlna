@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Callable, List, Tuple
 
 from bottle import request, static_file, abort, HTTPResponse
-from pysimpledlna.entity import Playlist, PlayListWrapper
+
+from prompt_toolkit_ext.event import KeyEvent
+from pysimpledlna.entity import Playlist, PlayListWrapper, DeviceList
 
 from pysimpledlna.ac import ActionController
 from pysimpledlna.dlna import DefaultResource
@@ -69,16 +71,26 @@ class DLNAService(DefaultResource):
     def __init__(self,
                  ac: ActionController,
                  play_list: PlayListWrapper,
+                 device_list: DeviceList,
                  playlist_accessor: Callable[[], List[Tuple[str, str]]],
-                 switch_playlist: Callable[[List[str], List[str]], None],
-                 switch_video: Callable[[List[str], List[str]], None]) -> None:
+                 select_playlist: Callable[[List[str], List[str]], None],
+                 select_video: Callable[[List[str], List[str]], None],
+                 select_device: Callable[[List[str], List[str]], None] = None,
+                 refresh_device: Callable[[KeyEvent], None] = None) -> None:
         super().__init__(f'/api/{ac.device.device_key}', method=['GET', 'POST'])
         self.ac = ac
         self.render = self.render_request
         self._playlist_accessor = playlist_accessor
-        self._switch_playlist = switch_playlist
+        self._switch_playlist = select_playlist
         self._play_list = play_list
-        self._switch_video = switch_video
+        self._switch_video = select_video
+        self._device_list: DeviceList = device_list
+        self._select_device: Callable[[List[str], List[str]], None] = select_device
+        self._refresh_device: Callable[[KeyEvent], None] = refresh_device
+
+    def set_device_handler(self, select_device: Callable[[List[str], List[str]], None], refresh_device: Callable[[KeyEvent], None]):
+        self._select_device = select_device
+        self._refresh_device = refresh_device
 
     def render_request(self):
         request_command = request.params.get('command')
@@ -109,8 +121,23 @@ class DLNAService(DefaultResource):
         elif request_command == 'backToDlna':
             self.back_to_dlna()
             return ''
+        elif request_command == 'selectDevice':
+            self.select_device()
+            return ''
+        elif request_command == 'refreshDevice':
+            self.refresh_device()
+            return ''
 
         abort(404, "错误的命令")
+
+    def select_device(self):
+        new_device_key = request.params.get('deviceKey')
+        current_device = self._device_list.device_list[self._device_list.selected_index]
+        old_device_key = current_device.device_key
+        self._select_device([old_device_key, ''], [new_device_key, ''])
+
+    def refresh_device(self):
+        self._refresh_device(KeyEvent(''))
 
     def back_to_dlna(self):
         index = int(request.params.get('index'))
@@ -247,12 +274,29 @@ class DLNAService(DefaultResource):
                     }
                 }
 
+    def _create_dlna_device_data(self):
+        device_list = list()
+        for device in self._device_list.device_list:
+            device_data = {
+                'deviceKey': device.device_key,
+                'location': device.location,
+                'friendlyName': device.friendly_name
+            }
+            device_list.append(device_data)
+        return {
+            'device': {
+                'selectedIndex': self._device_list.selected_index,
+                'deviceList': device_list
+            }
+        }
+
     def _create_all_data(self):
         result = {}
         func_array = [self._create_current_playlist_data,
                       self._create_current_video_data,
                       self._create_dlna_player_data,
-                      self._create_view_playlist_data]
+                      self._create_view_playlist_data,
+                      self._create_dlna_device_data]
         for func in func_array:
             result.update(func())
         return result

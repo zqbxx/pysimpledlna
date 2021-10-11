@@ -224,3 +224,26 @@ input[type=range]:focus::-ms-fill-upper {
     color:grey;
     padding-left: 3px;
 }
+
+#dlna-render li.mui-table-view-cell {
+    padding-right:15px;
+}
+
+#dlna-render li.mui-table-view-cell > div.mui-table {
+    vertical-align: middle;
+}
+
+#dlna-render .dlna-render-info {
+    vertical-align: top;
+}
+#dlna-render .dlna-render-radio {
+    vertical-align: top;
+}
+#dlna-render .dlna-render-radio div.mui-radio {
+    height:100%;
+}
+#dlna-render .dlna-render-radio > div.mui-radio > label {
+    height:42px;
+    width:100%;
+    text-align:right;
+}

@@ -12,6 +12,7 @@ mui.ready(function() {
         currentVideo: { path: '', name: '', position: -1, duration: -1, },
         dlnaPlayer: { occupied: false, status: "", },
         viewPlaylist: { name: '', index: -1, position: -1, duration: -1, videoList: [], },
+        device: {selectedIndex: -1, deviceList:[]},
     };
 
     let local = {
@@ -191,17 +192,31 @@ mui.ready(function() {
                         player_status_changed = global.dlnaPlayer.status != data.dlnaPlayer.status;
                         occupied_status_changed = global.dlnaPlayer.occupied != data.dlnaPlayer.occupied;
                         video_duration_changed = global.currentVideo.duration != data.currentVideo.duration;
+                        selectedDeviceChanged = global.device.selectedIndex != data.device.selectedIndex;
+                        deviceListChanged = global.device.deviceList.length != data.device.deviceList.length;
+                        if (!deviceListChanged) {
+                            for ( let i = 0; i < global.device.deviceList.length; i++) {
+                                globalDevice = global.device.deviceList[i];
+                                dataDevice = data.device.deviceList[i];
+                                if (globalDevice.location != dataDevice.location) {
+                                    deviceListChanged = true;
+                                    break;
+                                }
+                            }
+                        }
 
                         let old = {};
                         old.currentPlaylist = global.currentPlaylist;
                         old.currentVideo = global.currentVideo;
                         old.dlnaPlayer = global.dlnaPlayer;
                         old.viewPlaylist = global.viewPlaylist;
+                        old.device = global.device;
 
                         global.currentPlaylist = data.currentPlaylist;
                         global.currentVideo = data.currentVideo;
                         global.dlnaPlayer = data.dlnaPlayer;
                         global.viewPlaylist = data.viewPlaylist;
+                        global.device = data.device
 
                         if (player_status_changed && !global.isLocal) {
                             if (data.dlnaPlayer.status == 'Stop') {
@@ -249,6 +264,14 @@ mui.ready(function() {
 
                         if (current_video_changed || playlist_changed || player_status_changed || video_duration_changed || video_position_changed && !global.isLocal) {
                             updatePlaylistProgress();
+                        }
+
+                        if (deviceListChanged) {
+                            createDeviceList(global.device.deviceList, global.device.selectedIndex)
+                        }
+
+                        if (selectedDeviceChanged && !deviceListChanged) {
+                            updateSelectedDevice(global.device.selectedIndex)
                         }
 
                     }
@@ -621,6 +644,60 @@ mui.ready(function() {
         if (percent > -1) {
             playlistProgress.style.width = (percent > 1 ? percent.toFixed(0) : 1) + '%';
             playingVideoProgressText.innerText = '(已播放:' + percent.toFixed(2) + '%)'
+        }
+
+    }
+
+    function createDeviceList(deviceList, selectedIndex) {
+        let ul = document.querySelector('#dlna-render > div > ul');
+        let children = ul.childNodes;
+        for (let i = children.length - 1; i >= 0; i--) {
+            ul.removeChild(children[i]);
+        }
+        for ( let i = 0; i < deviceList.length; i++) {
+            let location = deviceList[i].location;
+            let friendlyName = deviceList[i].friendlyName;
+            let deviceKey = deviceList[i].deviceKey;
+            let li = document.createElement('li');
+            li.className = "mui-table-view-cell mui-media";
+            let html = `
+                <div class="mui-table">
+                    <div class="mui-table-cell mui-col-xs-2">
+                        <span>
+                            <img class="mui-media-object mui-pull-left head-img" src="./images/dlna_device.png">
+                        </span>
+					</div>
+					<div class="mui-table-cell mui-col-xs-8 dlna-render-info" style=''>
+					    <p>${friendlyName}</p>
+					    <p class="mui-ellipsis">${location}</p>
+					</div>
+					<div class="mui-table-cell mui-col-xs-2 mui-text-right dlna-render-radio">
+					    <div class="mui-input-row mui-radio mui-left">
+					        <label/>
+					        <input name="radio" type="radio" location="${location}" deviceKey="${deviceKey}">
+					    </div>
+					</div>
+				</div>
+            `
+            li.innerHTML = html;
+            li.querySelector('input[type=radio]').addEventListener('click', function(){
+                console.log('111')
+                let key = this.attributes['deviceKey'].value;
+                mui.getJSON(global.apiUrl,{
+                    command:'selectDevice',
+                    r: '' +new Date().getTime(),
+                    deviceKey: key,
+                }, function(){});
+            });
+            ul.appendChild(li)
+        }
+        updateSelectedDevice(selectedIndex)
+    }
+
+    function updateSelectedDevice(selectedIndex) {
+        let radios = document.querySelectorAll('#dlna-render > div > ul div.dlna-render-radio input[type=radio]');
+        if ( selectedIndex < radios.length ) {
+            radios[selectedIndex].checked = true
         }
 
     }

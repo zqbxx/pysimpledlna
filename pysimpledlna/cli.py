@@ -578,11 +578,13 @@ def playlist_play(args):
     from pysimpledlna.web import WebRoot, DLNAService
 
     web_root = WebRoot(ac, get_abs_path(Path('./webroot')), 0)
+
     dlna_service = DLNAService(ac,
                                play_list=play_list,
+                               device_list=device_list,
                                playlist_accessor=_get_playlist_list,
-                               switch_playlist=_playlist_selected,
-                               switch_video=_video_selected)
+                               select_playlist=_playlist_selected,
+                               select_video=_video_selected)
     dlna_server.app.route(**web_root.get_route_params())
     dlna_server.app.route(**dlna_service.get_route_params())
     player.webcontrol_url = web_root.get_player_page_url()
@@ -635,6 +637,7 @@ def playlist_play(args):
                         if new_device is not None:
                             result.append(known_device)
 
+                result = sorted(result, key=lambda dev: dev.location)
                 device_list.device_list = result
 
                 # 设置当前使用的设备
@@ -683,6 +686,7 @@ def playlist_play(args):
 
         new_device.set_sync_hook(positionhook, transportstatehook, exceptionhook)
         new_device.start_sync_remote_player_status()
+        player.update_dlna_render_part()
 
     # 更新播放列表选中项位置，如果视图被切换则不进行更新视频列表内容
     def _update_list_ui(current_index):
@@ -789,6 +793,8 @@ def playlist_play(args):
             ac.end = True
         else:
             ac.stop_device()
+
+    dlna_service.set_device_handler(_dlna_device_selected, _refresh_device_list)
 
     # 加入事件监听
     player.playlist_part.check_event += _video_selected

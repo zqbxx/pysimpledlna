@@ -114,15 +114,14 @@ class SimpleDLNAServer():
             friendlyName = get_element_data_by_tag_name(device_element, 'friendlyName')
             manufacturer = get_element_data_by_tag_name(device_element, 'manufacturer')
             manufacturerURL = get_element_data_by_tag_name(device_element, 'manufacturerURL')
-            '''
-            presentationURL = device_element.getElementsByTagName('presentationURL')[0].firstChild.data
-            modelDescription = device_element.getElementsByTagName('modelDescription')[0].firstChild.data
-            modelName = device_element.getElementsByTagName('modelName')[0].firstChild.data
-            modelURL = device_element.getElementsByTagName('modelURL')[0].firstChild.data
-            X_DLNADOC = device_element.getElementsByTagName('dlna:X_DLNADOC')[0].firstChild.data
-            UDN = device_element.getElementsByTagName('UDN')[0].firstChild.data
-            UID = device_element.getElementsByTagName('UID')[0].firstChild.data
-            '''
+            
+            #modelDescription = device_element.getElementsByTagName('modelDescription')[0].firstChild.data
+            #modelName = device_element.getElementsByTagName('modelName')[0].firstChild.data
+            #modelURL = device_element.getElementsByTagName('modelURL')[0].firstChild.data
+            #X_DLNADOC = device_element.getElementsByTagName('dlna:X_DLNADOC')[0].firstChild.data
+            #UDN = device_element.getElementsByTagName('UDN')[0].firstChild.data
+            #UID = device_element.getElementsByTagName('UID')[0].firstChild.data
+            
             device_key = random_str(8) + str(self.device_count)
             self.device_count += 1
 

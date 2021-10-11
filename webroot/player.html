@@ -51,6 +51,10 @@
 				<span class="mui-icon fa fa-file-movie-o"></span>
 				<span class="mui-tab-label">播放列表</span>
 			</a>
+			<a class="mui-tab-item" href="#dlna-render">
+				<span class="mui-icon fa fa-wifi"></span>
+				<span class="mui-tab-label">DLNA设备</span>
+			</a>
 		</nav>
 		<!-- 控制器页面 -->
 		<div class="mui-content">
@@ -153,6 +157,31 @@
 								<span class="mui-icon fa fa-play"></span>
 							</button>
 						</li-->
+					</ul>
+				</div>
+			</div>
+			<div id="dlna-render" class="mui-control-content">
+				<div class="mui-card">
+					<ul class="mui-table-view mui-table-view-chevron">
+						<li class="mui-table-view-cell mui-media">
+							<div class="mui-table" style=''>
+								<div class="mui-table-cell mui-col-xs-2">
+									<span>
+										<img class="mui-media-object mui-pull-left head-img" id="head-img" src="./images/logo.png">
+									</span>
+								</div>
+							    <div class="mui-table-cell mui-col-xs-8 dlna-render-info" style=''>
+							        <p>Kodi(sdfkxls-eekk)</p>
+							        <p class="mui-ellipsis">192.168.1.1</p>
+							    </div>
+							    <div class="mui-table-cell mui-col-xs-2 mui-text-right dlna-render-radio" style='' >
+									<div class="mui-input-row mui-radio mui-left " style=''  >
+										<label style=''></label>
+										<input name="radio" type="radio"  >
+									</div>
+							    </div>
+							</div>
+						</li>
 					</ul>
 				</div>
 			</div>
